@@ -1,34 +1,55 @@
 import { useState } from "react";
 import type { Project } from "../data/projects";
-import { PROJECTS } from "../data/projects";
+import { evaluateProposal } from "../api";
 import { Card } from "../components/common/Card";
 
 // ── Judge Screen ──────────────────────────────────────────────────────────────
 
 type JudgeState = "form" | "loading" | "high" | "safe";
 
-function JudgeScreen({ onOpenAudit }: { onOpenAudit: (p: Project) => void }) {
+function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudit: (p: Project) => void }) {
   const [state, setState] = useState<JudgeState>("form");
   const [loadStep, setLoadStep] = useState(0);
-  const [form, setForm] = useState({ title: "", description: "", amount: "", bsr: "", lat: "", lng: "" });
+  const [result, setResult] = useState<{ project: Project; score: number; reasons: string[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [jsonInput, setJsonInput] = useState(`{
+  "project_key": "MPLADS-2026-001",
+  "mp_name": "",
+  "state": "Maharashtra",
+  "constituency": "",
+  "ida": "",
+  "category": "",
+  "work_clean": "Construction of a community hall",
+  "locality": "Mumbai",
+  "block": "Kurla",
+  "recommended_date": "2026-08-28",
+  "status": "Proposed",
+  "ida_approval": "Pending",
+  "allocation_amount_numeric": 100000
+}`);
 
   const steps = ["Parsing proposal","Running NLP similarity","Checking BSR benchmark","Evaluating geospatial risk","Generating risk score"];
 
-  function handleSubmit() {
+  async function handleSubmit() {
+    setError(null);
     setState("loading");
-    let s = 0;
-    const iv = setInterval(() => {
-      s++;
-      setLoadStep(s);
-      if (s >= steps.length) {
-        clearInterval(iv);
-        const ratio = parseFloat(form.amount) / (parseFloat(form.bsr) || 1);
-        setTimeout(() => setState(ratio > 2 ? "high" : "safe"), 500);
-      }
-    }, 600);
+    try {
+      const input = JSON.parse(jsonInput);
+      const requiredFields = ["project_key", "work_clean", "allocation_amount_numeric"];
+      const missingField = requiredFields.find(field => input[field] === undefined || input[field] === "");
+      if (missingField) throw new Error(`Missing required field: ${missingField}`);
+      setLoadStep(1);
+      const response = await evaluateProposal(input);
+      setLoadStep(steps.length);
+      setResult({ project: response.project, score: response.evaluation.final_score, reasons: response.evaluation.reasons });
+      setState(response.evaluation.risk_level === "RED" ? "high" : "safe");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Evaluation failed");
+      setState("form");
+    }
   }
 
-  function reset() { setState("form"); setForm({ title: "", description: "", amount: "", bsr: "", lat: "", lng: "" }); setLoadStep(0); }
+  function reset() { setState("form"); setLoadStep(0); setError(null); }
 
   if (state === "loading") {
     return (
@@ -68,10 +89,7 @@ function JudgeScreen({ onOpenAudit }: { onOpenAudit: (p: Project) => void }) {
         </div>
         <Card>
           <div className="p-4 space-y-2">
-            {(isHigh
-              ? ["🔴 Cost exceeds BSR benchmark","🔴 Description matches known project pattern","🟡 Geographic anomaly detected"]
-              : ["🟢 Cost within BSR benchmark","🟢 No duplicate patterns found","🟢 Geolocation verified"]
-            ).map(f => (
+            {(result?.reasons.length ? result.reasons : [isHigh ? "Cost or risk signals require review" : "No significant risk signals detected"]).map(f => (
               <div key={f} className="text-sm px-3 py-2 rounded-2xl" style={{ background: "#F3F0F9", color: "#1C1B1F" }}>{f}</div>
             ))}
           </div>
@@ -80,7 +98,7 @@ function JudgeScreen({ onOpenAudit }: { onOpenAudit: (p: Project) => void }) {
           {isHigh ? "Proposal automatically added to Active AI Monitoring." : "✓ Evaluation complete. Proposal appears legitimate."}
         </div>
         <div className="flex gap-3">
-          <button onClick={() => onOpenAudit(PROJECTS[isHigh ? 0 : 4])} className="flex-1 h-12 rounded-3xl text-sm font-semibold md-ripple" style={{ background: "#ECE6F0", color: "#1C1B1F" }}>View Audit</button>
+          <button onClick={() => result ? onOpenAudit(result.project) : projects[0] && onOpenAudit(projects[0])} className="flex-1 h-12 rounded-3xl text-sm font-semibold md-ripple" style={{ background: "#ECE6F0", color: "#1C1B1F" }}>View Audit</button>
           <button onClick={reset} className="flex-1 h-12 rounded-3xl text-sm font-semibold text-white md-ripple" style={{ background: "#4F46E5" }}>New Proposal</button>
         </div>
       </div>
@@ -109,40 +127,20 @@ function JudgeScreen({ onOpenAudit }: { onOpenAudit: (p: Project) => void }) {
         </div>
       </div>
 
-      {/* Form */}
+      {/* JSON input */}
       <div className="px-4 pb-24">
         <Card>
           <div className="p-5 space-y-4">
-            {[
-              { key: "title", label: "Work Title", placeholder: "e.g. Community Hall Construction", type: "text" },
-              { key: "amount", label: "Requested Amount (₹)", placeholder: "0.00", type: "number" },
-              { key: "bsr", label: "BSR Benchmark Cost (₹)", placeholder: "0.00", type: "number" },
-              { key: "lat", label: "Latitude", placeholder: "e.g. 19.0728", type: "text" },
-              { key: "lng", label: "Longitude", placeholder: "e.g. 72.8826", type: "text" },
-            ].map(f => (
-              <div key={f.key}>
-                <label className="text-[10px] font-semibold uppercase tracking-wider mb-2 block" style={{ color: "#49454F" }}>{f.label}</label>
-                <input
-                  type={f.type}
-                  value={(form as any)[f.key]}
-                  onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-                  placeholder={f.placeholder}
-                  className="w-full h-12 px-4 rounded-2xl border text-sm outline-none transition-colors"
-                  style={{ background: "#F3F0F9", borderColor: "#CAC4D0", color: "#1C1B1F" }}
-                />
-              </div>
-            ))}
-            <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wider mb-2 block" style={{ color: "#49454F" }}>Project Description</label>
-              <textarea
-                value={form.description}
-                onChange={e => setForm({ ...form, description: e.target.value })}
-                rows={3}
-                placeholder="Describe the project scope, location, and objectives..."
-                className="w-full px-4 py-3 rounded-2xl border text-sm outline-none resize-none"
-                style={{ background: "#F3F0F9", borderColor: "#CAC4D0", color: "#1C1B1F" }}
-              />
-            </div>
+            <label className="text-[10px] font-semibold uppercase tracking-wider mb-2 block" style={{ color: "#49454F" }}>Project JSON</label>
+            <textarea
+              value={jsonInput}
+              onChange={e => setJsonInput(e.target.value)}
+              rows={18}
+              spellCheck={false}
+              className="w-full px-4 py-3 rounded-2xl border text-xs font-mono outline-none resize-none"
+              style={{ background: "#F3F0F9", borderColor: "#CAC4D0", color: "#1C1B1F" }}
+            />
+            {error && <div className="rounded-2xl px-3 py-2 text-xs" style={{ background: "#FFDAD6", color: "#B3261E" }}>{error}</div>}
           </div>
         </Card>
       </div>

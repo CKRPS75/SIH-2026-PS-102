@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { Project } from "../data/projects";
-import { PROJECTS } from "../data/projects";
 import { riskColor } from "../utils/helpers";
 import { Chip } from "../components/common/Chip";
 import { Card } from "../components/common/Card";
@@ -8,21 +7,21 @@ import { RiskChip } from "../components/common/RiskChip";
 
 // ── Audits Screen ─────────────────────────────────────────────────────────────
 
-function AuditsScreen({ onOpenAudit }: { onOpenAudit: (p: Project) => void }) {
+function AuditsScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudit: (p: Project) => void }) {
   const [search, setSearch] = useState("");
   const [statusF, setStatusF] = useState("All");
 
-  const filtered = PROJECTS.filter(p => {
+  const filtered = projects.filter(p => {
     const ms = p.title.toLowerCase().includes(search.toLowerCase()) || p.id.toLowerCase().includes(search.toLowerCase());
     const mf = statusF === "All" || p.status === statusF;
     return ms && mf;
   });
 
   const summary = [
-    { label: "Critical", value: PROJECTS.filter(p=>p.status==="HIGH RISK").length, bg: "#FFDAD6", text: "#B3261E" },
-    { label: "Review", value: PROJECTS.filter(p=>p.status==="REVIEW").length, bg: "#FFEFD6", text: "#7C4F00" },
-    { label: "Verified", value: PROJECTS.filter(p=>p.status==="VERIFIED").length, bg: "#D4F8E8", text: "#006C4C" },
-    { label: "Total", value: PROJECTS.length, bg: "#E8E7FF", text: "#1A006E" },
+    { label: "Critical", value: projects.filter(p=>p.status==="HIGH RISK").length, bg: "#FFDAD6", text: "#B3261E" },
+    { label: "Review", value: projects.filter(p=>p.status==="REVIEW").length, bg: "#FFEFD6", text: "#7C4F00" },
+    { label: "Verified", value: projects.filter(p=>p.status==="VERIFIED").length, bg: "#D4F8E8", text: "#006C4C" },
+    { label: "Total", value: projects.length, bg: "#E8E7FF", text: "#1A006E" },
   ];
 
   return (

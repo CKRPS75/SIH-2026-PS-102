@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { Project, Filter } from "../data/projects";
-import { PROJECTS } from "../data/projects";
 import { riskColor } from "../utils/helpers";
 import { Chip } from "../components/common/Chip";
 import { Card } from "../components/common/Card";
@@ -8,13 +7,13 @@ import { RiskChip } from "../components/common/RiskChip";
 
 // ── Home Screen ───────────────────────────────────────────────────────────────
 
-function HomeScreen({ onOpenAudit }: { onOpenAudit: (p: Project) => void }) {
+function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudit: (p: Project) => void }) {
   const [filter, setFilter] = useState<Filter>("All");
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("2 min ago");
 
   const filters: Filter[] = ["All", "Duplicates", "Overpricing", "Split Sanctions"];
-  const filtered = PROJECTS.filter(p => {
+  const filtered = projects.filter(p => {
     if (filter === "All") return true;
     if (filter === "Duplicates") return p.anomaly === "Duplicate";
     if (filter === "Overpricing") return p.anomaly === "Overpricing";

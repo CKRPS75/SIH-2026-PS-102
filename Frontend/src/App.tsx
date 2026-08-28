@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Tab, Project } from "./data/projects";
+import { getProjects } from "./api";
 import { StatusBar } from "./components/common/StatusBar";
 import { NavBar } from "./components/common/NavBar";
 import { HomeScreen } from "./screens/HomeScreen";
@@ -15,9 +16,19 @@ import { BottomNav } from "./components/navigation/BottomNav";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [auditProject, setAuditProject] = useState<Project | null>(null);
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+
+  useEffect(() => {
+    getProjects()
+      .then(setProjects)
+      .catch(requestError => setError(requestError instanceof Error ? requestError.message : "Unable to load projects"))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="min-h-full flex items-center justify-center p-4" style={{ background: "#1a1a2e" }}>
@@ -50,9 +61,11 @@ export default function App() {
             <button onClick={() => { setShowProfile(true); setShowNotif(false); }} className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs text-white" style={{ background: "#4F46E5" }}>GO</button>
           </div>
 
-          {tab === "home" && <HomeScreen onOpenAudit={p => setAuditProject(p)} />}
-          {tab === "audits" && <AuditsScreen onOpenAudit={p => setAuditProject(p)} />}
-          {tab === "judge" && <JudgeScreen onOpenAudit={p => setAuditProject(p)} />}
+          {loading && <div className="flex-1 flex items-center justify-center text-sm">Loading live predictions...</div>}
+          {!loading && error && <div className="flex-1 flex items-center justify-center p-6 text-center text-sm">{error}</div>}
+          {!loading && !error && tab === "home" && <HomeScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
+          {!loading && !error && tab === "audits" && <AuditsScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
+          {!loading && !error && tab === "judge" && <JudgeScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
           {tab === "field" && <FieldScreen />}
 
           {/* Bottom sheets */}
