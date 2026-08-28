@@ -1,6 +1,6 @@
 {
   "rows": 100,
-  "overall_exact_expected_level_match_rate": 0.99,
+  "overall_exact_expected_level_match_rate": 0.97,
   "overall_minimum_expected_level_match_rate": 1.0,
   "case_summary": {
     "cost_outlier": {
@@ -9,12 +9,13 @@
         "YELLOW": 10
       },
       "predicted_levels": {
-        "YELLOW": 10
+        "YELLOW": 8,
+        "RED": 2
       },
-      "matched_expected_level": 10,
+      "matched_expected_level": 8,
       "met_minimum_expected_level": 10,
-      "mean_model_risk_score": 42.28,
-      "isolation_forest_anomaly_flags": 4
+      "mean_model_risk_score": 46.42,
+      "isolation_forest_anomaly_flags": 0
     },
     "duplicate": {
       "rows": 10,
@@ -39,7 +40,7 @@
       },
       "matched_expected_level": 70,
       "met_minimum_expected_level": 70,
-      "mean_model_risk_score": 4.91,
+      "mean_model_risk_score": 8.92,
       "isolation_forest_anomaly_flags": 0
     },
     "split_sanction": {
@@ -53,8 +54,8 @@
       },
       "matched_expected_level": 9,
       "met_minimum_expected_level": 10,
-      "mean_model_risk_score": 43.47,
-      "isolation_forest_anomaly_flags": 1
+      "mean_model_risk_score": 45.75,
+      "isolation_forest_anomaly_flags": 0
     }
   },
   "notes": [

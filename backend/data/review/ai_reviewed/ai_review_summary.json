@@ -6,12 +6,12 @@
       "review_type": "high_risk",
       "rows": 100,
       "label_counts": {
-        "valid_flag": 59,
-        "unsure": 41
+        "valid_flag": 55,
+        "unsure": 45
       },
       "recommended_action_counts": {
-        "priority_review": 59,
-        "secondary_review": 41
+        "priority_review": 55,
+        "secondary_review": 45
       }
     },
     {

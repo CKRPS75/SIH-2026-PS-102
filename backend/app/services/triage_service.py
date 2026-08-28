@@ -20,6 +20,13 @@ class RiskScoringService:
             + self.settings.risk_weight_cost * cost.cost_score
             + self.settings.risk_weight_graph * graph.graph_score
         )
+        major_anomaly = (
+            duplicate.alert
+            or cost.cost_score >= self.settings.risk_green_max
+            or graph.graph_score >= self.settings.risk_green_max
+        )
+        if major_anomaly:
+            final_score = max(final_score, self.settings.risk_green_max)
         final_score = round(final_score, 2)
         level = self._risk_level(final_score)
         return RiskEvaluation(

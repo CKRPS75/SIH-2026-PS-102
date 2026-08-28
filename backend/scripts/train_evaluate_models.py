@@ -20,8 +20,15 @@ FEATURE_COLUMNS = [
     "amount_vs_state_category_median_ratio",
     "amount_vs_constituency_category_median_ratio",
     "same_work_same_locality_count",
+    "same_work_same_duplicate_location_count",
     "same_work_same_block_count",
     "same_work_same_constituency_count",
+    "same_category_same_locality_count",
+    "same_category_same_block_count",
+    "same_category_same_constituency_count",
+    "same_mp_category_locality_count",
+    "same_ida_category_locality_count",
+    "same_type_location_month_count",
     "same_mp_same_work_count",
     "same_ida_same_work_count",
     "same_mp_same_day_count",
@@ -33,6 +40,8 @@ FEATURE_COLUMNS = [
     "mp_project_count",
     "ida_project_count",
     "locality_project_count",
+    "duplicate_location_project_count",
+    "location_duplicate_group_count",
 ]
 
 BOOLEAN_FEATURES = [
@@ -44,6 +53,8 @@ BOOLEAN_FEATURES = [
     "ida_pending_flag",
 ]
 
+COST_OUTLIER_MEDIAN_RATIO_THRESHOLD = 2.5
+
 ISOLATION_FOREST_FEATURES = [
     "allocation_amount_numeric",
     "amount_vs_category_median_ratio",
@@ -51,13 +62,22 @@ ISOLATION_FOREST_FEATURES = [
     "amount_vs_constituency_category_median_ratio",
     "project_amount_as_pct_of_mp_allocation",
     "same_work_same_locality_count",
+    "same_work_same_duplicate_location_count",
     "same_work_same_block_count",
     "same_work_same_constituency_count",
+    "same_category_same_locality_count",
+    "same_category_same_block_count",
+    "same_category_same_constituency_count",
+    "same_mp_category_locality_count",
+    "same_ida_category_locality_count",
+    "same_type_location_month_count",
     "same_ida_locality_7day_sub5l_count",
     "same_mp_locality_7day_sub5l_count",
     "mp_project_count",
     "ida_project_count",
     "locality_project_count",
+    "duplicate_location_project_count",
+    "location_duplicate_group_count",
 ]
 
 GENERATED_SCORE_COLUMNS = [
@@ -92,10 +112,13 @@ def fit_baseline_model(train: pd.DataFrame) -> dict[str, Any]:
     amount = to_number(train["allocation_amount_numeric"])
     model = {
         "model_family": "baseline_rules_plus_trained_thresholds",
-        "version": "v0.2-data-baseline",
+        "version": "v0.6-locality-ward-duplicates",
         "notes": [
             "Thresholds are fitted from the train feature distribution only.",
             "Rule scores are combined with an IsolationForest financial anomaly model.",
+            "A major duplicate, financial, split-sanction, or AI anomaly raises the final level to at least YELLOW.",
+            "Duplicate scoring uses same-category same-locality+ward repeat patterns when coordinates are unavailable.",
+            "Fixed financial median-ratio trigger is 2.5x for state/category or constituency/category comparisons.",
             "Weak labels are review targets, not confirmed fraud labels.",
         ],
         "feature_columns": FEATURE_COLUMNS,
@@ -191,9 +214,13 @@ def score_with_model(
     thresholds = model["thresholds"]
     amount = to_number(scored["allocation_amount_numeric"])
     state_ratio = to_number(scored["amount_vs_state_category_median_ratio"])
+    constituency_ratio = to_number(scored["amount_vs_constituency_category_median_ratio"])
     category_ratio = to_number(scored["amount_vs_category_median_ratio"])
-    locality_repeats = to_number(scored["same_work_same_locality_count"])
-    exact_duplicates = to_number(scored["exact_duplicate_group_count"])
+    locality_repeats = to_number(scored["same_work_same_duplicate_location_count"])
+    type_location_repeats = to_number(scored["same_type_location_month_count"])
+    category_locality_repeats = to_number(scored["same_category_same_locality_count"])
+    category_block_repeats = to_number(scored["same_category_same_block_count"])
+    exact_duplicates = to_number(scored["location_duplicate_group_count"])
     split_7day = to_number(scored["same_ida_locality_7day_sub5l_count"]).combine(
         to_number(scored["same_mp_locality_7day_sub5l_count"]),
         max,
@@ -204,14 +231,20 @@ def score_with_model(
 
     duplicate_score = (
         (locality_repeats.gt(1) * 65)
+        + (type_location_repeats.gt(1) * 55)
         + (exact_duplicates.gt(1) * 20)
         + (locality_repeats.clip(0, 5) * 3)
+        + (type_location_repeats.clip(0, 5) * 5)
+        + (category_locality_repeats.clip(0, 5) * 2)
+        + (category_block_repeats.clip(0, 10) * 1)
     ).clip(0, 100)
+
+    strongest_location_amount_ratio = pd.concat([state_ratio, constituency_ratio], axis=1).max(axis=1)
 
     rule_financial_score = (
         (state_ratio.ge(thresholds["state_category_ratio_p95"]) * 45)
         + (state_ratio.ge(thresholds["state_category_ratio_p99"]) * 25)
-        + (state_ratio.ge(3.0) * 45)
+        + (strongest_location_amount_ratio.ge(COST_OUTLIER_MEDIAN_RATIO_THRESHOLD) * 45)
         + (category_ratio.ge(4.0) * 55)
         + (amount.ge(thresholds["amount_p99"]) * 15)
         + (mp_allocation_pct.ge(thresholds["mp_allocation_pct_p95"]) * 10)
@@ -273,6 +306,16 @@ def score_with_model(
         (duplicate_score < 90) & (financial_score < 90) & (split_score < 90),
         scored["model_risk_score"].clip(lower=35),
     )
+    major_anomaly = (
+        duplicate_score.ge(65)
+        | financial_score.ge(45)
+        | split_score.ge(60)
+        | isolation_forest_risk.ge(97)
+    )
+    scored["model_risk_score"] = scored["model_risk_score"].where(
+        ~major_anomaly,
+        scored["model_risk_score"].clip(lower=30),
+    )
     scored["model_risk_level"] = pd.cut(
         scored["model_risk_score"],
         bins=[-1, 29.999, 65, 100],
@@ -283,9 +326,9 @@ def score_with_model(
     for _, row in scored.iterrows():
         row_reasons: list[str] = []
         if row["model_duplicate_score"] >= 65:
-            row_reasons.append("Repeated work appears in same locality or exact duplicate group")
+            row_reasons.append("Repeated or similar-category work appears in the same locality")
         if row["model_financial_rule_score"] >= 45:
-            row_reasons.append("Allocation amount is high compared with trained category/state distribution")
+            row_reasons.append("Allocation amount is high compared with trained category/state or constituency distribution")
         if row["isolation_forest_risk_score"] >= 97:
             row_reasons.append("Financial pattern is unusual against the IsolationForest train distribution")
         if row["model_split_sanction_score"] >= 60:

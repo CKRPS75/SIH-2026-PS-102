@@ -4,27 +4,27 @@
   "summary": {
     "rows": 12072,
     "risk_level_counts": {
-      "GREEN": 10419,
-      "YELLOW": 1636,
-      "RED": 17
+      "GREEN": 8655,
+      "YELLOW": 3378,
+      "RED": 39
     },
     "flag_counts": {
-      "duplicate_score_ge_65": 1279,
-      "financial_score_ge_45": 1184,
+      "duplicate_score_ge_65": 1872,
+      "financial_score_ge_45": 1811,
       "split_score_ge_60": 30,
       "pending_score_gt_0": 7761
     },
     "top_states_by_yellow_red": {
-      "Uttar Pradesh": 364,
-      "Andhra Pradesh": 172,
-      "West Bengal": 148,
-      "Karnataka": 145,
-      "Tamil Nadu": 140,
-      "Telangana": 105,
-      "Bihar": 100,
-      "Gujarat": 67,
-      "Odisha": 42,
-      "Madhya Pradesh": 39
+      "Uttar Pradesh": 545,
+      "Bihar": 311,
+      "Andhra Pradesh": 290,
+      "Tamil Nadu": 272,
+      "Telangana": 217,
+      "West Bengal": 212,
+      "Odisha": 196,
+      "Karnataka": 194,
+      "Punjab": 125,
+      "Gujarat": 122
     },
     "review_guidance": [
       "Open each review CSV and fill manual_review_label with valid_flag, false_positive, or unsure.",

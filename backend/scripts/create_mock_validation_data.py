@@ -53,9 +53,17 @@ def duplicate_rows(source: pd.DataFrame, count: int) -> list[dict]:
         mocked["work_raw"] = f"NA - {row['work_clean']}"
         mocked["work_clean"] = f"{row['work_clean']} - duplicate recommendation"
         mocked["same_work_same_locality_count"] = 5
+        mocked["same_work_same_duplicate_location_count"] = 5
         mocked["same_work_same_block_count"] = max_int(row.get("same_work_same_block_count"), 5)
         mocked["same_work_same_constituency_count"] = max_int(row.get("same_work_same_constituency_count"), 5)
+        mocked["same_category_same_locality_count"] = max_int(row.get("same_category_same_locality_count"), 5)
+        mocked["same_category_same_block_count"] = max_int(row.get("same_category_same_block_count"), 5)
+        mocked["same_category_same_constituency_count"] = max_int(row.get("same_category_same_constituency_count"), 5)
+        mocked["same_mp_category_locality_count"] = max_int(row.get("same_mp_category_locality_count"), 5)
+        mocked["same_ida_category_locality_count"] = max_int(row.get("same_ida_category_locality_count"), 5)
+        mocked["same_type_location_month_count"] = max_int(row.get("same_type_location_month_count"), 5)
         mocked["exact_duplicate_group_count"] = 5
+        mocked["location_duplicate_group_count"] = 5
         mocked["is_exact_duplicate_candidate"] = "true"
         mocked["weak_label_duplicate"] = "true"
         mocked["weak_label_any_risk"] = "true"

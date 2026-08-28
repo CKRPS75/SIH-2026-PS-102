@@ -58,12 +58,16 @@ class ProjectCreate(BaseModel):
     external_work_id: str | None = None
     title: str = Field(..., min_length=3)
     description: str = Field(..., min_length=3)
+    category: str | None = None
     scheme: str = "MPLADS"
     district: str = Field(..., min_length=1)
     state: str | None = None
+    ward: str | None = None
+    block: str | None = None
+    locality: str | None = None
     agency: AgencyInput
     contractor: ContractorInput
-    location: LocationInput
+    location: LocationInput | None = None
     estimated_cost: float = Field(..., ge=0)
     cost_items: list[CostItemInput] = Field(default_factory=list)
     award_date: date | None = None

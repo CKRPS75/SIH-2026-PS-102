@@ -17,8 +17,8 @@ class Settings:
     risk_weight_graph: float = 0.20
     risk_green_max: float = 30.0
     risk_red_min: float = 65.0
-    scoring_policy_version: str = "v0.1-mvp"
-    model_version: str = "v0.1-rules"
+    scoring_policy_version: str = "v0.4-locality-ward-duplicates"
+    model_version: str = "v0.4-rules"
     pfms_mode: str = "mock"
     esakshi_mode: str = "mock"
 

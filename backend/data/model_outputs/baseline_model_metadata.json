@@ -1,9 +1,12 @@
 {
   "model_family": "baseline_rules_plus_trained_thresholds",
-  "version": "v0.2-data-baseline",
+  "version": "v0.6-locality-ward-duplicates",
   "notes": [
     "Thresholds are fitted from the train feature distribution only.",
     "Rule scores are combined with an IsolationForest financial anomaly model.",
+    "A major duplicate, financial, split-sanction, or AI anomaly raises the final level to at least YELLOW.",
+    "Duplicate scoring uses same-category same-locality+ward repeat patterns when coordinates are unavailable.",
+    "Fixed financial median-ratio trigger is 2.5x for state/category or constituency/category comparisons.",
     "Weak labels are review targets, not confirmed fraud labels."
   ],
   "feature_columns": [
@@ -12,8 +15,15 @@
     "amount_vs_state_category_median_ratio",
     "amount_vs_constituency_category_median_ratio",
     "same_work_same_locality_count",
+    "same_work_same_duplicate_location_count",
     "same_work_same_block_count",
     "same_work_same_constituency_count",
+    "same_category_same_locality_count",
+    "same_category_same_block_count",
+    "same_category_same_constituency_count",
+    "same_mp_category_locality_count",
+    "same_ida_category_locality_count",
+    "same_type_location_month_count",
     "same_mp_same_work_count",
     "same_ida_same_work_count",
     "same_mp_same_day_count",
@@ -24,7 +34,9 @@
     "project_amount_as_pct_of_mp_allocation",
     "mp_project_count",
     "ida_project_count",
-    "locality_project_count"
+    "locality_project_count",
+    "duplicate_location_project_count",
+    "location_duplicate_group_count"
   ],
   "boolean_features": [
     "is_sub_5_lakh",
@@ -59,13 +71,22 @@
       "amount_vs_constituency_category_median_ratio",
       "project_amount_as_pct_of_mp_allocation",
       "same_work_same_locality_count",
+      "same_work_same_duplicate_location_count",
       "same_work_same_block_count",
       "same_work_same_constituency_count",
+      "same_category_same_locality_count",
+      "same_category_same_block_count",
+      "same_category_same_constituency_count",
+      "same_mp_category_locality_count",
+      "same_ida_category_locality_count",
+      "same_type_location_month_count",
       "same_ida_locality_7day_sub5l_count",
       "same_mp_locality_7day_sub5l_count",
       "mp_project_count",
       "ida_project_count",
-      "locality_project_count"
+      "locality_project_count",
+      "duplicate_location_project_count",
+      "location_duplicate_group_count"
     ],
     "n_estimators": 200,
     "contamination": 0.03,
