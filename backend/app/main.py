@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1.analytics import router as analytics_router
 from app.api.v1.projects import router as project_router
 from app.core.config import settings
 
@@ -32,3 +33,4 @@ def health() -> dict[str, str]:
 
 
 app.include_router(project_router)
+app.include_router(analytics_router)

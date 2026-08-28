@@ -55,6 +55,47 @@ http://127.0.0.1:8000/docs
 - `POST /api/v1/projects/{project_id}/preprocess`
 - `POST /api/v1/projects/{project_id}/evaluate`
 - `GET /api/v1/projects/{project_id}/audit`
+- `GET /api/v1/analytics/summary`
+- `GET /api/v1/analytics/state-risk`
+- `GET /api/v1/predictions`
+- `GET /api/v1/predictions/{project_key}`
+
+## Model Analytics Endpoints
+
+The frontend should use these endpoints for dashboards and investigation screens:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8000/api/v1/analytics/summary
+```
+
+Returns total projects, total allocation amount, GREEN/YELLOW/RED counts, duplicate flags, financial anomaly flags, IsolationForest anomaly flags, split-sanction flags, pending flags, and top risky states.
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8000/api/v1/analytics/state-risk?limit=10"
+```
+
+Returns state-wise project counts, risk counts, allocation totals, mean risk score, and detector-specific counts.
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8000/api/v1/predictions?risk_level=RED&limit=25"
+```
+
+Supports filters:
+
+- `risk_level=GREEN|YELLOW|RED`
+- `state=Uttar Pradesh`
+- `category=Road`
+- `mp=<partial MP name>`
+- `ida=<partial agency name>`
+- `isolation_forest_only=true`
+- `limit=1..500`
+- `offset=0..n`
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8000/api/v1/predictions/{project_key}"
+```
+
+Returns one prediction with compact frontend fields plus the full raw model-output row.
 
 ## Dataset Preparation
 

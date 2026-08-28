@@ -2,6 +2,14 @@
 
 Use these dataset attributes to explain the fraud-detection workflow visually.
 
+## Backend API Sources
+
+- summary cards: `GET /api/v1/analytics/summary`
+- state charts/tables: `GET /api/v1/analytics/state-risk?limit=20`
+- investigation table: `GET /api/v1/predictions?risk_level=RED&limit=100`
+- AI-only anomaly table: `GET /api/v1/predictions?isolation_forest_only=true&limit=100`
+- project drill-down: `GET /api/v1/predictions/{project_key}`
+
 ## Executive Summary Cards
 
 - total projects
