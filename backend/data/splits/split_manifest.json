@@ -1,0 +1,60 @@
+[
+  {
+    "source": "C:\\Users\\barha\\Downloads\\MPLADS.csv",
+    "sheet": null,
+    "columns": [
+      "MP NAME",
+      "WORK",
+      "CATEGORY",
+      "STATE",
+      "CONSTITUENCY",
+      "IDA",
+      "CITY",
+      "WARD",
+      "BLOCK",
+      "VILLAGE",
+      "RECOMMENDED DATE",
+      "ALLOCATION AMOUNT",
+      "IDA APPROVAL",
+      "STATUS",
+      "HOUSE"
+    ],
+    "total_rows": 60359,
+    "train_rows": 48287,
+    "test_rows": 12072,
+    "train_file": "data\\splits\\MPLADS_train.csv",
+    "test_file": "data\\splits\\MPLADS_test.csv"
+  },
+  {
+    "source": "C:\\Users\\barha\\Downloads\\Allocated Limit for Honble MPs (1).xlsx",
+    "sheet": "Sheet1",
+    "columns": [
+      "Sr. No.",
+      "State",
+      "Hon'ble Members of Parliament",
+      "Elected/Nominated",
+      "Allocated AMOUNT ( ₹ )"
+    ],
+    "total_rows": 232,
+    "train_rows": 185,
+    "test_rows": 47,
+    "train_file": "data\\splits\\Allocated_Limit_for_Honble_MPs_1_Sheet1_train.csv",
+    "test_file": "data\\splits\\Allocated_Limit_for_Honble_MPs_1_Sheet1_test.csv"
+  },
+  {
+    "source": "C:\\Users\\barha\\Downloads\\Allocated Limit for Honble MPs.xlsx",
+    "sheet": "Sheet1",
+    "columns": [
+      "Sr. No.",
+      "State",
+      "Hon'ble Members of Parliaments",
+      "Constituency",
+      "Allocated AMOUNT ( ₹ )"
+    ],
+    "total_rows": 544,
+    "train_rows": 435,
+    "test_rows": 109,
+    "train_file": "data\\splits\\Allocated_Limit_for_Honble_MPs_Sheet1_train.csv",
+    "test_file": "data\\splits\\Allocated_Limit_for_Honble_MPs_Sheet1_test.csv"
+  }
+]
