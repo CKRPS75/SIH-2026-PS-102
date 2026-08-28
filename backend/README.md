@@ -2,7 +2,7 @@
 
 MVP backend scaffold for SIH26102: AI-assisted detection of unusual finances, duplicate works, collusion patterns, and ghost-asset risks in MPLADS implementation.
 
-This first backend pass intentionally keeps the core logic dependency-light and explainable. The route layer is FastAPI-ready, while the detectors run as pure Python services so they can be tested before PostGIS, Neo4j, SBERT, and IsolationForest are wired in.
+This backend pass keeps the core logic explainable while adding a first real ML anomaly model. The route layer is FastAPI-ready, while the dataset pipeline can clean records, build features, train rule thresholds, train IsolationForest, and generate review/mock validation outputs before PostGIS, Neo4j, and SBERT are wired in.
 
 ## What Is Implemented
 
@@ -16,6 +16,7 @@ This first backend pass intentionally keeps the core logic dependency-light and 
 - Audit events for mutations.
 - FastAPI endpoints for health, project create/list/detail, preprocess, evaluate, audit, and demo seed.
 - Unit tests for the core risk logic.
+- Dataset training pipeline with rule thresholds plus scikit-learn IsolationForest financial anomaly scoring.
 
 ## Intended Tech Stack
 
@@ -55,6 +56,72 @@ http://127.0.0.1:8000/docs
 - `POST /api/v1/projects/{project_id}/evaluate`
 - `GET /api/v1/projects/{project_id}/audit`
 
+## Dataset Preparation
+
+The raw supplied datasets are first split under `data/splits`, then cleaned and normalized under `data/processed`.
+
+Run the cleaning step from `backend/`:
+
+```powershell
+python scripts/clean_normalize_datasets.py --input-dir data/splits --output-dir data/processed
+```
+
+Generated processed files:
+
+- `data/processed/projects_train_normalized.csv`
+- `data/processed/projects_test_normalized.csv`
+- `data/processed/mp_allocations_train_normalized.csv`
+- `data/processed/mp_allocations_test_normalized.csv`
+- `data/processed/cleaning_report.json`
+
+Project normalization includes cleaned work descriptions, canonical MP keys, state/constituency/locality keys, ISO dates, numeric allocation amounts, exact-duplicate group counts, and data-quality flags.
+
+Build model-ready feature columns and weak labels:
+
+```powershell
+python scripts/build_features.py --input-dir data/processed --output-dir data/features
+```
+
+Generated feature files:
+
+- `data/features/projects_train_features.csv`
+- `data/features/projects_test_features.csv`
+- `data/features/feature_report.json`
+
+See `docs/data_workflow.md` for the complete data-stage plan and `docs/frontend_analytics_plan.md` for dashboard graph recommendations.
+
+Train/evaluate the current baseline plus IsolationForest model:
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 scripts/train_evaluate_models.py --input-dir data/features --output-dir data/model_outputs
+```
+
+Generated model output files:
+
+- `data/model_outputs/baseline_model_metadata.json`
+- `data/model_outputs/isolation_forest_model.joblib`
+- `data/model_outputs/train_predictions.csv`
+- `data/model_outputs/test_predictions.csv`
+- `data/model_outputs/evaluation_report.json`
+
+Create and verify controlled mock data:
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 scripts/create_mock_validation_data.py --predictions data/model_outputs/train_predictions.csv --model data/model_outputs/baseline_model_metadata.json --isolation-forest-model data/model_outputs/isolation_forest_model.joblib --output-dir data/mock
+```
+
+Create manual review samples for rule tuning:
+
+```powershell
+python scripts/create_rule_review_pack.py --predictions data/model_outputs/test_predictions.csv --output-dir data/review --sample-size 100
+```
+
+Auto-fill the review pack with AI-assisted first-pass labels:
+
+```powershell
+python scripts/auto_review_rule_pack.py --input-dir data/review --output-dir data/review/ai_reviewed
+```
+
 ## Requirements Needed From Your Side
 
 - Sample MPLADS project records, preferably 50+ rows.
@@ -69,7 +136,7 @@ http://127.0.0.1:8000/docs
 
 - Replace in-memory storage with PostgreSQL/PostGIS models and migrations.
 - Replace the token-similarity placeholder with SBERT embeddings.
-- Add IsolationForest once enough historical cost data is available.
+- Connect the trained IsolationForest artifact to an API scoring endpoint.
 - Add Neo4j persistence and Cypher-based graph rules.
 - Add field-evidence upload with EXIF and image integrity checks.
 - Add JWT/RBAC and human decision endpoints.

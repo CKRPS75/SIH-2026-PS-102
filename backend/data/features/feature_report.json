@@ -1,0 +1,64 @@
+{
+  "train": {
+    "rows": 48287,
+    "risk_level_counts": {
+      "GREEN": 33908,
+      "YELLOW": 13996,
+      "RED": 383
+    },
+    "weak_label_counts": {
+      "duplicate": 12430,
+      "cost_outlier": 4695,
+      "split_sanction": 249,
+      "pending": 31134,
+      "any_risk": 14379
+    },
+    "amount_summary": {
+      "min": 0.0,
+      "median": 400000.0,
+      "mean": 580739.6,
+      "max": 91000000.0
+    }
+  },
+  "test": {
+    "rows": 12072,
+    "risk_level_counts": {
+      "GREEN": 9938,
+      "YELLOW": 2095,
+      "RED": 39
+    },
+    "weak_label_counts": {
+      "duplicate": 1354,
+      "cost_outlier": 1171,
+      "split_sanction": 30,
+      "pending": 7761,
+      "any_risk": 2134
+    },
+    "amount_summary": {
+      "min": 0.0,
+      "median": 400000.0,
+      "mean": 574908.43,
+      "max": 150000000.0
+    }
+  },
+  "feature_notes": [
+    "Features are derived from cleaned MPLADS rows and MP allocation limits.",
+    "Labels are weak/rule-based review targets, not confirmed fraud labels.",
+    "Test amount median ratios are computed from train medians to avoid test leakage.",
+    "Geospatial features are intentionally omitted until latitude/longitude are added."
+  ],
+  "frontend_metric_candidates": [
+    "risk_level_rule_based",
+    "risk_score_rule_based",
+    "allocation_amount_numeric",
+    "state",
+    "constituency",
+    "category",
+    "mp_name_canonical",
+    "ida",
+    "possible_text_duplicate",
+    "possible_cost_outlier",
+    "possible_split_sanction",
+    "possible_pending_risk"
+  ]
+}

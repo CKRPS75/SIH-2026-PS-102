@@ -1,0 +1,66 @@
+{
+  "files": [
+    {
+      "source_file": "data\\review\\high_risk_review_sample.csv",
+      "output_file": "data\\review\\ai_reviewed\\high_risk_review_ai_reviewed.csv",
+      "review_type": "high_risk",
+      "rows": 100,
+      "label_counts": {
+        "valid_flag": 59,
+        "unsure": 41
+      },
+      "recommended_action_counts": {
+        "priority_review": 59,
+        "secondary_review": 41
+      }
+    },
+    {
+      "source_file": "data\\review\\duplicate_review_sample.csv",
+      "output_file": "data\\review\\ai_reviewed\\duplicate_review_ai_reviewed.csv",
+      "review_type": "duplicate",
+      "rows": 100,
+      "label_counts": {
+        "valid_flag": 100
+      },
+      "recommended_action_counts": {
+        "keep_duplicate_rule": 100
+      }
+    },
+    {
+      "source_file": "data\\review\\cost_outlier_review_sample.csv",
+      "output_file": "data\\review\\ai_reviewed\\cost_outlier_review_ai_reviewed.csv",
+      "review_type": "cost_outlier",
+      "rows": 100,
+      "label_counts": {
+        "valid_flag": 100
+      },
+      "recommended_action_counts": {
+        "keep_cost_rule": 100
+      }
+    },
+    {
+      "source_file": "data\\review\\split_sanction_review_sample.csv",
+      "output_file": "data\\review\\ai_reviewed\\split_sanction_review_ai_reviewed.csv",
+      "review_type": "split_sanction",
+      "rows": 30,
+      "label_counts": {
+        "valid_flag": 30
+      },
+      "recommended_action_counts": {
+        "keep_split_rule": 30
+      }
+    },
+    {
+      "source_file": "data\\review\\pending_review_sample.csv",
+      "output_file": "data\\review\\ai_reviewed\\pending_review_ai_reviewed.csv",
+      "review_type": "pending",
+      "rows": 100,
+      "label_counts": {
+        "valid_flag": 100
+      },
+      "recommended_action_counts": {
+        "prioritize_admin_review": 100
+      }
+    }
+  ]
+}

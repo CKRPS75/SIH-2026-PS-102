@@ -1,0 +1,76 @@
+{
+  "model_family": "baseline_rules_plus_trained_thresholds",
+  "version": "v0.2-data-baseline",
+  "notes": [
+    "Thresholds are fitted from the train feature distribution only.",
+    "Rule scores are combined with an IsolationForest financial anomaly model.",
+    "Weak labels are review targets, not confirmed fraud labels."
+  ],
+  "feature_columns": [
+    "allocation_amount_numeric",
+    "amount_vs_category_median_ratio",
+    "amount_vs_state_category_median_ratio",
+    "amount_vs_constituency_category_median_ratio",
+    "same_work_same_locality_count",
+    "same_work_same_block_count",
+    "same_work_same_constituency_count",
+    "same_mp_same_work_count",
+    "same_ida_same_work_count",
+    "same_mp_same_day_count",
+    "same_ida_same_day_count",
+    "same_work_same_day_count",
+    "same_ida_locality_7day_sub5l_count",
+    "same_mp_locality_7day_sub5l_count",
+    "project_amount_as_pct_of_mp_allocation",
+    "mp_project_count",
+    "ida_project_count",
+    "locality_project_count"
+  ],
+  "boolean_features": [
+    "is_sub_5_lakh",
+    "is_near_5_lakh",
+    "is_high_value_project",
+    "missing_locality_flag",
+    "status_unsanctioned_flag",
+    "ida_pending_flag"
+  ],
+  "thresholds": {
+    "amount_p95": 1500000.0,
+    "amount_p99": 3800000.0,
+    "state_category_ratio_p95": 4.2857,
+    "state_category_ratio_p99": 11.1359,
+    "same_work_locality_p95": 5.0,
+    "split_cluster_p95": 4.0,
+    "mp_allocation_pct_p95": 0.0068
+  },
+  "risk_weights": {
+    "duplicate": 0.3,
+    "financial": 0.35,
+    "split_sanction": 0.25,
+    "pending": 0.1
+  },
+  "isolation_forest": {
+    "model_family": "IsolationForest",
+    "version": "v0.1-financial-anomaly",
+    "feature_columns": [
+      "allocation_amount_numeric",
+      "amount_vs_category_median_ratio",
+      "amount_vs_state_category_median_ratio",
+      "amount_vs_constituency_category_median_ratio",
+      "project_amount_as_pct_of_mp_allocation",
+      "same_work_same_locality_count",
+      "same_work_same_block_count",
+      "same_work_same_constituency_count",
+      "same_ida_locality_7day_sub5l_count",
+      "same_mp_locality_7day_sub5l_count",
+      "mp_project_count",
+      "ida_project_count",
+      "locality_project_count"
+    ],
+    "n_estimators": 200,
+    "contamination": 0.03,
+    "random_state": 42,
+    "n_jobs": 1,
+    "score_direction": "Higher isolation_forest_risk_score means more unusual against train distribution."
+  }
+}

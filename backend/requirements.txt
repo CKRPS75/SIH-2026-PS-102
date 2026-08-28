@@ -4,6 +4,8 @@ pydantic>=2.7
 python-dotenv>=1.0
 httpx>=0.27
 pytest>=8.2
+pandas>=2.2
+numpy>=1.26
 
 # Next-phase ML/GIS dependencies.
 scikit-learn>=1.5

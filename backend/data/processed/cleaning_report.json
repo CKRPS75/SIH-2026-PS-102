@@ -1,0 +1,36 @@
+{
+  "projects_train": {
+    "rows": 48287,
+    "rows_with_quality_flags": 580,
+    "quality_flag_counts": {
+      "missing_locality": 580
+    }
+  },
+  "projects_test": {
+    "rows": 12072,
+    "rows_with_quality_flags": 143,
+    "quality_flag_counts": {
+      "missing_locality": 143
+    }
+  },
+  "mp_allocations_train": {
+    "rows": 620,
+    "rows_with_quality_flags": 2,
+    "quality_flag_counts": {
+      "missing_mp_name": 2,
+      "missing_state": 2
+    }
+  },
+  "mp_allocations_test": {
+    "rows": 156,
+    "rows_with_quality_flags": 1,
+    "quality_flag_counts": {
+      "missing_or_invalid_allocated_amount": 1
+    }
+  },
+  "notes": [
+    "Source split files are preserved under data/splits.",
+    "No fraud labels are created in this step; only cleaning, normalization, and data-quality flags are added.",
+    "Latitude/longitude are not present in the supplied MPLADS.csv, so geospatial duplicate detection still needs coordinates from another source."
+  ]
+}
