@@ -35,12 +35,18 @@ def label_row(row: pd.Series, review_type: str) -> tuple[str, str, str]:
     split_score = to_number(row.get("model_split_sanction_score"))
     pending_score = to_number(row.get("model_pending_score"))
     same_locality = to_number(row.get("same_work_same_locality_count"))
+    same_duplicate_location = to_number(row.get("same_work_same_duplicate_location_count"))
+    location_duplicate_group = to_number(row.get("location_duplicate_group_count"))
     same_block = to_number(row.get("same_work_same_block_count"))
+    same_category_locality = to_number(row.get("same_category_same_locality_count"))
+    same_category_block = to_number(row.get("same_category_same_block_count"))
+    same_type_month = to_number(row.get("same_type_location_month_count"))
     same_ida_7day = to_number(row.get("same_ida_locality_7day_sub5l_count"))
     same_mp_7day = to_number(row.get("same_mp_locality_7day_sub5l_count"))
     same_ida_day = to_number(row.get("same_ida_same_day_count"))
     category_ratio = to_number(row.get("amount_vs_category_median_ratio"))
     state_ratio = to_number(row.get("amount_vs_state_category_median_ratio"))
+    constituency_ratio = to_number(row.get("amount_vs_constituency_category_median_ratio"))
     near_5_lakh = is_true(row.get("is_near_5_lakh"))
     status = str(row.get("status", "")).lower()
     ida_approval = str(row.get("ida_approval", "")).lower()
@@ -50,15 +56,23 @@ def label_row(row: pd.Series, review_type: str) -> tuple[str, str, str]:
     if review_type == "duplicate":
         if not locality:
             return "unsure", "Cannot validate duplicate signal because locality is missing.", "needs_location_data"
-        if same_locality >= 2 and duplicate_score >= 65:
-            return "valid_flag", "Same cleaned work appears multiple times in the same locality.", "keep_duplicate_rule"
+        if same_duplicate_location >= 2 and duplicate_score >= 65:
+            return "valid_flag", "Same cleaned work appears multiple times for the same locality and ward.", "keep_duplicate_rule"
+        if location_duplicate_group >= 2 and duplicate_score >= 65:
+            return "valid_flag", "Exact duplicate group repeats for the same locality and ward.", "keep_duplicate_rule"
+        if same_category_locality >= 2 and duplicate_score >= 65:
+            if same_type_month >= 2:
+                return "valid_flag", "Similar project category repeats for the same locality and ward within the same MP/IDA month.", "keep_type_location_rule"
+            return "unsure", "Similar project category repeats for the same locality and ward, but timing or MP/IDA continuity needs review.", "review_after_coordinates"
         if same_block >= 10 and duplicate_score >= 65:
             return "unsure", "Repeated work appears at block level, but exact local duplication is not proven.", "review_after_coordinates"
+        if same_category_block >= 10 and duplicate_score >= 65:
+            return "unsure", "Similar project category repeats at block level, but exact local duplication is not proven.", "review_after_coordinates"
         return "false_positive", "Duplicate score appears driven by broad/generic repetition rather than same-locality evidence.", "reduce_duplicate_weight"
 
     if review_type == "cost_outlier":
-        if financial_score >= 70 or category_ratio >= 4 or state_ratio >= 3 or amount >= 2_500_000:
-            return "valid_flag", "Amount is high compared with trained category/state amount distribution.", "keep_cost_rule"
+        if financial_score >= 70 or category_ratio >= 4 or state_ratio >= 2.5 or constituency_ratio >= 2.5 or amount >= 2_500_000:
+            return "valid_flag", "Amount is high compared with trained category/state or constituency amount distribution.", "keep_cost_rule"
         if financial_score >= 45:
             return "unsure", "Amount is above threshold but not extreme; needs BSR/rate table validation.", "review_with_bsr"
         return "false_positive", "Financial evidence is weak without stronger amount ratio or BSR support.", "reduce_cost_weight"

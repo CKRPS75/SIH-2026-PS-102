@@ -107,14 +107,20 @@ Current model columns:
 - `isolation_forest_anomaly_flag`: native IsolationForest anomaly flag.
 - `model_financial_isolation_score`: IsolationForest contribution after the 97th percentile cutoff.
 - `model_financial_score`: combined financial score used in final risk scoring.
+- Financial median-ratio alert threshold: `2.5x` for the strongest state/category or constituency/category comparison.
+- Major anomaly floor: one major duplicate, financial, split-sanction, or AI anomaly moves the final score to at least `30`, so the case becomes minimum `YELLOW` even when other factors are clean.
+- Location-name duplicate fallback: until coordinates are available, the duplicate model checks repeated work and same project category/type using a dedicated locality+ward key. Block/village are not part of duplicate identity, except as fallback locality text when ward-level data is missing.
 
 Current evaluation snapshot:
 
 - Test rows: `12,072`.
-- Test risk levels: `10,419 GREEN`, `1,636 YELLOW`, `17 RED`.
-- Test IsolationForest anomalies: `136`.
-- Additional financial cases from IsolationForest beyond the rule score: `13`.
-- Combined financial score precision/recall vs weak cost-outlier labels: `0.9890 / 1.0000`.
+- Test risk levels: `8,655 GREEN`, `3,378 YELLOW`, `39 RED`.
+- Test duplicate hits after locality+ward duplicate fallback: `1,872`.
+- Test financial hits after reduced `2.5x` local median threshold: `1,811`.
+- Test IsolationForest anomalies: `22`.
+- Additional financial cases from IsolationForest beyond the rule score: `10`.
+- Combined financial score precision/recall vs weak cost-outlier labels: `0.9945 / 1.0000`.
+- Any-risk precision/recall vs weak labels after the major-anomaly floor: `1.0000 / 1.0000`.
 
 Future model upgrades:
 

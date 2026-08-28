@@ -21,6 +21,14 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
     return true;
   });
   const alerts = filtered.filter(p => p.status !== "VERIFIED");
+  const mapPositions = [
+    { x: "40%", y: "40%" },
+    { x: "43%", y: "44%" },
+    { x: "58%", y: "55%" },
+    { x: "63%", y: "32%" },
+    { x: "28%", y: "65%" },
+    { x: "52%", y: "20%" },
+  ];
 
   function handleRefresh() {
     setRefreshing(true);
@@ -102,18 +110,16 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
                 <text x="38" y="100" fill="#475569" fontSize="8" fontFamily="Roboto">Dharavi</text>
               </svg>
               {/* Map pins */}
-              {[
-                { p: filtered.find(p=>p.id==="MPLADS-2026-TRAP-001"), x:"40%", y:"40%" },
-                { p: filtered.find(p=>p.id==="MPLADS-2026-TRAP-002"), x:"43%", y:"44%" },
-                { p: filtered.find(p=>p.id==="MPLADS-2026-TRAP-003"), x:"58%", y:"55%" },
-                { p: filtered.find(p=>p.id==="MPLADS-2026-TRAP-004"), x:"63%", y:"32%" },
-                { p: filtered.find(p=>p.id==="MPLADS-2026-BASE-001"), x:"28%", y:"65%" },
-                { p: filtered.find(p=>p.id==="MPLADS-2026-BASE-002"), x:"52%", y:"20%" },
-              ].map(({ p, x, y }) => p ? (
-                <button key={p.id} onClick={() => onOpenAudit(p)} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: x, top: y }}>
+              {filtered.slice(0, 6).map((p, index) => (
+                <button
+                  key={p.id}
+                  onClick={() => onOpenAudit(p)}
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
+                  style={{ left: mapPositions[index].x, top: mapPositions[index].y }}
+                >
                   <div className="w-4 h-4 rounded-full border-2 border-white shadow-lg transition-transform active:scale-125" style={{ background: riskColor(p.risk).dot }} />
                 </button>
-              ) : null)}
+              ))}
               {/* Legend */}
               <div className="absolute bottom-2 left-2 flex gap-2 rounded-xl px-2.5 py-1.5" style={{ background: "rgba(15,23,42,0.85)" }}>
                 {[["#10B981","Safe"],["#F59E0B","Review"],["#B3261E","High"]].map(([c,l]) => (
@@ -150,7 +156,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
                       <RiskChip status={p.status} />
                     </div>
                     <div className="text-[10px] font-mono mt-0.5" style={{ color: "#79747E" }}>{p.id}</div>
-                    <div className="text-xs mt-0.5" style={{ color: "#49454F" }}>{p.anomaly} Detection · {p.amount}</div>
+                    <div className="text-xs mt-0.5" style={{ color: "#49454F" }}>{p.amount}</div>
                   </div>
                 </div>
                 <button

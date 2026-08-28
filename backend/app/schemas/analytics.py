@@ -66,3 +66,49 @@ class PredictionListResponse(BaseModel):
     limit: int
     offset: int
     rows: list[PredictionRow]
+
+
+class ProjectEvaluationInput(BaseModel):
+    project_key: str = Field(default="LIVE-JSON")
+    mp_name: str = ""
+    state: str = ""
+    constituency: str = ""
+    ida: str = ""
+    category: str = ""
+    work_clean: str
+    locality: str = ""
+    ward: str = ""
+    block: str = ""
+    recommended_date: str = ""
+    sanction_date: str = ""
+    status: str = ""
+    ida_approval: str = ""
+    allocation_amount_numeric: float
+
+
+class EvaluationReference(BaseModel):
+    project_key: str
+    work_clean: str
+    amount: float
+    state: str | None = None
+    constituency: str | None = None
+    locality: str | None = None
+    ward: str | None = None
+    recommended_date: str | None = None
+    source_dataset: str
+    match_type: str
+
+
+class JsonEvaluationResponse(BaseModel):
+    project_key: str
+    flag: str
+    flag_color: str
+    rating: float = Field(description="Risk rating on a 0 to 10 scale.")
+    risk_score: float = Field(description="Internal 0 to 100 score retained for analytics.")
+    comment: str
+    reason_description: str
+    reasons: list[str]
+    component_scores: dict[str, float]
+    median_context: dict[str, float]
+    ratio_context: dict[str, float]
+    references: dict[str, list[EvaluationReference]]

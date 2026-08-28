@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from app.core.config import Settings
 from app.ml.geo import haversine_distance_m
+from app.ml.text import normalize_text
 from app.schemas.project import ProjectRecord
 from app.schemas.risk import CostFinding, CostRiskResult
 
@@ -72,13 +73,7 @@ class FinancialAnomalyDetector:
                 continue
             if abs((candidate.award_date - project.award_date).days) > self.settings.split_sanction_window_days:
                 continue
-            distance_m = haversine_distance_m(
-                project.location.lat,
-                project.location.lng,
-                candidate.location.lat,
-                candidate.location.lng,
-            )
-            if distance_m <= self.settings.duplicate_radius_km * 1000:
+            if self._same_location(project, candidate):
                 related.append(candidate.id)
 
         if len(related) < 2:
@@ -105,3 +100,26 @@ class FinancialAnomalyDetector:
         if ratio >= 3.0:
             return 100.0
         return min(100.0, ((ratio - 1.0) / 2.0) * 100.0)
+
+    def _same_location(self, project: ProjectRecord, candidate: ProjectRecord) -> bool:
+        if project.location is not None and candidate.location is not None:
+            distance_m = haversine_distance_m(
+                project.location.lat,
+                project.location.lng,
+                candidate.location.lat,
+                candidate.location.lng,
+            )
+            return distance_m <= self.settings.duplicate_radius_km * 1000
+
+        project_locality = self._location_key(project, ["locality", "block", "district", "state"])
+        candidate_locality = self._location_key(candidate, ["locality", "block", "district", "state"])
+        if project_locality and candidate_locality and project_locality == candidate_locality:
+            return True
+
+        project_block = self._location_key(project, ["block", "district", "state"])
+        candidate_block = self._location_key(candidate, ["block", "district", "state"])
+        return bool(project_block and candidate_block and project_block == candidate_block)
+
+    @staticmethod
+    def _location_key(project: ProjectRecord, fields: list[str]) -> str:
+        return normalize_text(" ".join(str(getattr(project, field) or "") for field in fields))

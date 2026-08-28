@@ -1,16 +1,16 @@
 import { useState } from "react";
 import type { Project } from "../data/projects";
-import { evaluateProposal } from "../api";
+import { evaluateProposal, type RiskEvaluation } from "../api";
 import { Card } from "../components/common/Card";
 
 // ── Judge Screen ──────────────────────────────────────────────────────────────
 
-type JudgeState = "form" | "loading" | "high" | "safe";
+type JudgeState = "form" | "loading" | "result";
 
 function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudit: (p: Project) => void }) {
   const [state, setState] = useState<JudgeState>("form");
   const [loadStep, setLoadStep] = useState(0);
-  const [result, setResult] = useState<{ project: Project; score: number; reasons: string[] } | null>(null);
+  const [result, setResult] = useState<{ project: Project; evaluation: RiskEvaluation } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [jsonInput, setJsonInput] = useState(`{
   "project_key": "MPLADS-2026-001",
@@ -21,14 +21,16 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
   "category": "",
   "work_clean": "Construction of a community hall",
   "locality": "Mumbai",
+  "ward": "L",
   "block": "Kurla",
   "recommended_date": "2026-08-28",
+  "sanction_date": "",
   "status": "Proposed",
   "ida_approval": "Pending",
   "allocation_amount_numeric": 100000
 }`);
 
-  const steps = ["Parsing proposal","Running NLP similarity","Checking BSR benchmark","Evaluating geospatial risk","Generating risk score"];
+  const steps = ["Parsing proposal","Checking locality and ward","Comparing trained medians","Finding split-sanction clusters","Generating risk rating"];
 
   async function handleSubmit() {
     setError(null);
@@ -41,8 +43,8 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
       setLoadStep(1);
       const response = await evaluateProposal(input);
       setLoadStep(steps.length);
-      setResult({ project: response.project, score: response.evaluation.final_score, reasons: response.evaluation.reasons });
-      setState(response.evaluation.risk_level === "RED" ? "high" : "safe");
+      setResult(response);
+      setState("result");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Evaluation failed");
       setState("form");
@@ -71,32 +73,74 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
     );
   }
 
-  if (state === "high" || state === "safe") {
-    const isHigh = state === "high";
+  if (state === "result" && result) {
+    const evaluation = result.evaluation;
+    const flagBg = evaluation.flag === "RED" ? "#FFDAD6" : evaluation.flag === "YELLOW" ? "#FFEFD6" : "#D4F8E8";
+    const flagText = evaluation.flag === "RED" ? "#B3261E" : evaluation.flag === "YELLOW" ? "#7C4F00" : "#006C4C";
+    const references = Object.entries(evaluation.references).flatMap(([group, refs]) =>
+      refs.map(ref => ({ ...ref, group }))
+    );
     return (
       <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-scale-in" style={{ background: "#F3F0F9" }}>
-        <div className="rounded-3xl p-6 text-center" style={{ background: isHigh ? "#FFDAD6" : "#D4F8E8" }}>
-          <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: isHigh ? "#B3261E" : "#006C4C" }}>
-            {isHigh ? "HIGH FRAUD RISK" : "LOW RISK DETECTED"}
-          </div>
-          <div className="text-6xl font-black mb-1" style={{ color: isHigh ? "#B3261E" : "#006C4C" }}>
-            {isHigh ? 90 : 18}
-          </div>
-          <div className="text-sm" style={{ color: isHigh ? "#410002" : "#002116" }}>out of 100</div>
-          <div className="mt-4 h-2 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.1)" }}>
-            <div className="h-full rounded-full" style={{ width: isHigh ? "90%" : "18%", background: isHigh ? "#B3261E" : "#006C4C" }} />
+        <div className="rounded-3xl p-5 space-y-4" style={{ background: flagBg }}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: flagText }}>Flag</div>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full border-2 border-white shadow-sm" style={{ background: evaluation.flag_color }} />
+                <span className="text-xl font-black" style={{ color: flagText }}>{evaluation.flag}</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: flagText }}>Rating</div>
+              <div className="text-4xl font-black" style={{ color: flagText }}>{evaluation.rating.toFixed(1)}</div>
+              <div className="text-xs" style={{ color: flagText }}>out of 10</div>
+            </div>
           </div>
         </div>
+
         <Card>
-          <div className="p-4 space-y-2">
-            {(result?.reasons.length ? result.reasons : [isHigh ? "Cost or risk signals require review" : "No significant risk signals detected"]).map(f => (
-              <div key={f} className="text-sm px-3 py-2 rounded-2xl" style={{ background: "#F3F0F9", color: "#1C1B1F" }}>{f}</div>
+          <div className="p-4 space-y-3">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#49454F" }}>Comment</div>
+              <div className="text-sm leading-relaxed" style={{ color: "#1C1B1F" }}>{evaluation.comment}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#49454F" }}>Reason/Description</div>
+              <div className="text-xs leading-relaxed" style={{ color: "#49454F" }}>{evaluation.reason_description}</div>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="p-4 space-y-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>Component Scores</div>
+            {Object.entries(evaluation.component_scores).map(([name, score]) => (
+              <div key={name}>
+                <div className="flex justify-between text-[10px] mb-1 capitalize" style={{ color: "#49454F" }}><span>{name.replace("_", " ")}</span><span>{score.toFixed(1)}</span></div>
+                <div className="h-2 rounded-full overflow-hidden" style={{ background: "#ECE6F0" }}>
+                  <div className="h-full rounded-full" style={{ width: `${Math.min(score, 100)}%`, background: score >= 65 ? "#B3261E" : score >= 45 ? "#F59E0B" : "#10B981" }} />
+                </div>
+              </div>
             ))}
           </div>
         </Card>
-        <div className="rounded-3xl px-4 py-3 text-xs font-medium" style={{ background: isHigh ? "#FFEFD6" : "#D4F8E8", color: isHigh ? "#7C4F00" : "#006C4C" }}>
-          {isHigh ? "Proposal automatically added to Active AI Monitoring." : "✓ Evaluation complete. Proposal appears legitimate."}
-        </div>
+
+        {references.length > 0 && (
+          <Card>
+            <div className="p-4 space-y-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>Compared Records</div>
+              {references.slice(0, 8).map(ref => (
+                <div key={`${ref.group}-${ref.project_key}`} className="rounded-2xl px-3 py-2" style={{ background: "#F3F0F9" }}>
+                  <div className="text-[10px] font-mono" style={{ color: "#79747E" }}>{ref.project_key} · {ref.source_dataset}</div>
+                  <div className="text-xs font-semibold truncate" style={{ color: "#1C1B1F" }}>{ref.work_clean}</div>
+                  <div className="text-[10px]" style={{ color: "#49454F" }}>{ref.locality || "Unknown locality"} · Ward {ref.ward || "Unknown"} · Rs {(ref.amount / 100000).toFixed(1)}L</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         <div className="flex gap-3">
           <button onClick={() => result ? onOpenAudit(result.project) : projects[0] && onOpenAudit(projects[0])} className="flex-1 h-12 rounded-3xl text-sm font-semibold md-ripple" style={{ background: "#ECE6F0", color: "#1C1B1F" }}>View Audit</button>
           <button onClick={reset} className="flex-1 h-12 rounded-3xl text-sm font-semibold text-white md-ripple" style={{ background: "#4F46E5" }}>New Proposal</button>

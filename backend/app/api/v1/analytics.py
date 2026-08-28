@@ -2,12 +2,21 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.schemas.analytics import AnalyticsSummary, PredictionDetail, PredictionListResponse, StateRiskRow
+from app.schemas.analytics import (
+    AnalyticsSummary,
+    JsonEvaluationResponse,
+    PredictionDetail,
+    PredictionListResponse,
+    ProjectEvaluationInput,
+    StateRiskRow,
+)
+from app.services.json_evaluation_service import JsonEvaluationService
 from app.services.prediction_analytics_service import PredictionAnalyticsService
 
 
 router = APIRouter(prefix="/api/v1", tags=["analytics"])
 analytics_service = PredictionAnalyticsService()
+json_evaluation_service = JsonEvaluationService()
 
 
 def _data_not_ready_error(error: FileNotFoundError) -> HTTPException:
@@ -72,3 +81,11 @@ def get_prediction(project_key: str) -> PredictionDetail:
     if not prediction:
         raise HTTPException(status_code=404, detail={"code": "PREDICTION_NOT_FOUND", "project_key": project_key})
     return prediction
+
+
+@router.post("/evaluate-json", response_model=JsonEvaluationResponse)
+def evaluate_json_project(proposal: ProjectEvaluationInput) -> JsonEvaluationResponse:
+    try:
+        return json_evaluation_service.evaluate(proposal)
+    except FileNotFoundError as error:
+        raise _data_not_ready_error(error) from None

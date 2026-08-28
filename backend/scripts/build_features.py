@@ -11,6 +11,7 @@ PROJECT_TRAIN = "projects_train_normalized.csv"
 PROJECT_TEST = "projects_test_normalized.csv"
 ALLOC_TRAIN = "mp_allocations_train_normalized.csv"
 ALLOC_TEST = "mp_allocations_test_normalized.csv"
+COST_OUTLIER_MEDIAN_RATIO_THRESHOLD = 2.5
 
 
 def load_csv(path: Path) -> pd.DataFrame:
@@ -29,6 +30,22 @@ def yes_no_mask(mask: pd.Series) -> pd.Series:
     return mask.fillna(False).map(lambda value: "true" if bool(value) else "false")
 
 
+def normalize_key(series: pd.Series) -> pd.Series:
+    return (
+        series.fillna("")
+        .astype(str)
+        .str.lower()
+        .str.replace(r"[^a-z0-9]+", "_", regex=True)
+        .str.strip("_")
+    )
+
+
+def first_populated(left: pd.Series, right: pd.Series) -> pd.Series:
+    left_text = left.fillna("").astype(str).str.strip()
+    right_text = right.fillna("").astype(str).str.strip()
+    return left_text.where(left_text.astype(bool), right_text)
+
+
 def safe_ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
     denominator = denominator.replace(0, pd.NA)
     return (numerator / denominator).fillna(0.0).round(4)
@@ -42,6 +59,23 @@ def add_group_count(df: pd.DataFrame, columns: list[str], output: str) -> None:
     populated = df[columns].apply(lambda row: all(str(item).strip() for item in row), axis=1)
     counts = df.groupby(columns, dropna=False)[columns[0]].transform("count")
     df[output] = counts.where(populated, 0).astype(int)
+
+
+def window_counts_by_date(group: pd.DataFrame, date_column: str, days: int) -> pd.Series:
+    dates = group[date_column].sort_values()
+    count_values = []
+    low = 0
+    high = 0
+    values = dates.tolist()
+    window = pd.Timedelta(days=days)
+
+    for index, row_date in enumerate(values):
+        while row_date - values[low] > window:
+            low += 1
+        while high + 1 < len(values) and values[high + 1] - row_date <= window:
+            high += 1
+        count_values.append(high - low + 1)
+    return pd.Series(count_values, index=dates.index, dtype=int)
 
 
 def build_allocation_lookup(allocations: pd.DataFrame) -> pd.DataFrame:
@@ -64,21 +98,14 @@ def add_temporal_cluster_counts(df: pd.DataFrame) -> None:
         & (df["is_sub_5_lakh_bool"])
         & (df["locality_key"].astype(bool))
     ].copy()
-    if valid.empty:
-        return
-
-    for output, keys in [
-        ("same_ida_locality_7day_sub5l_count", ["ida_key", "locality_key"]),
-        ("same_mp_locality_7day_sub5l_count", ["mp_key", "locality_key"]),
-    ]:
-        counts = pd.Series(0, index=valid.index, dtype=int)
-        for _, group in valid.groupby(keys, dropna=False):
-            dates = group["recommended_date_dt"].sort_values()
-            for row_index, row_date in dates.items():
-                low = row_date - pd.Timedelta(days=7)
-                high = row_date + pd.Timedelta(days=7)
-                counts.loc[row_index] = int(((dates >= low) & (dates <= high)).sum())
-        df.loc[counts.index, output] = counts
+    if not valid.empty:
+        for output, keys in [
+            ("same_ida_locality_7day_sub5l_count", ["ida_key", "locality_key"]),
+            ("same_mp_locality_7day_sub5l_count", ["mp_key", "locality_key"]),
+        ]:
+            for _, group in valid.groupby(keys, dropna=False):
+                counts = window_counts_by_date(group, "recommended_date_dt", 7)
+                df.loc[counts.index, output] = counts
 
 
 def add_features(
@@ -91,6 +118,17 @@ def add_features(
 ) -> pd.DataFrame:
     df = projects.copy()
     df["allocation_amount_numeric"] = to_number(df["allocation_amount"])
+    df["category_key"] = normalize_key(df["category"])
+    df["block_key"] = normalize_key(df["block"])
+    df["duplicate_location"] = first_populated(
+        df["city"],
+        first_populated(df["village"], df["block"]),
+    )
+    df["duplicate_location_key"] = normalize_key(
+        df["duplicate_location"].fillna("").astype(str)
+        + "|"
+        + df["ward"].fillna("").astype(str)
+    )
     df["recommended_date_dt"] = to_date(df["recommended_date"])
     df["recommended_month"] = df["recommended_date_dt"].dt.to_period("M").astype(str).replace("NaT", "")
     df["recommended_year"] = df["recommended_date_dt"].dt.year.fillna(0).astype(int)
@@ -143,14 +181,29 @@ def add_features(
 
     for columns, output in [
         (["work_key", "locality_key"], "same_work_same_locality_count"),
+        (["work_key", "duplicate_location_key"], "same_work_same_duplicate_location_count"),
         (["work_key", "block"], "same_work_same_block_count"),
         (["work_key", "constituency_key"], "same_work_same_constituency_count"),
+        (["category_key", "duplicate_location_key"], "same_category_same_locality_count"),
+        (["category_key", "block_key"], "same_category_same_block_count"),
+        (["category_key", "constituency_key"], "same_category_same_constituency_count"),
+        (["mp_key", "category_key", "duplicate_location_key"], "same_mp_category_locality_count"),
+        (["ida_key", "category_key", "duplicate_location_key"], "same_ida_category_locality_count"),
+        (
+            ["mp_key", "ida_key", "category_key", "duplicate_location_key", "recommended_month"],
+            "same_type_location_month_count",
+        ),
         (["mp_key", "work_key"], "same_mp_same_work_count"),
         (["ida_key", "work_key"], "same_ida_same_work_count"),
         (["mp_key", "recommended_date"], "same_mp_same_day_count"),
         (["ida_key", "recommended_date"], "same_ida_same_day_count"),
         (["work_key", "recommended_date"], "same_work_same_day_count"),
         (["locality_key"], "locality_project_count"),
+        (["duplicate_location_key"], "duplicate_location_project_count"),
+        (
+            ["work_key", "state_key", "constituency_key", "duplicate_location_key", "allocation_amount"],
+            "location_duplicate_group_count",
+        ),
     ]:
         add_group_count(df, columns, output)
 
@@ -173,6 +226,13 @@ def add_features(
     df["amount_vs_constituency_category_median_ratio"] = safe_ratio(
         df["allocation_amount_numeric"], df["constituency_category_median_amount"]
     )
+    strongest_location_amount_ratio = pd.concat(
+        [
+            df["amount_vs_state_category_median_ratio"],
+            df["amount_vs_constituency_category_median_ratio"],
+        ],
+        axis=1,
+    ).max(axis=1)
 
     df["missing_locality_flag"] = yes_no_mask(~df["locality_key"].astype(bool))
     df["status_unsanctioned_flag"] = yes_no_mask(df["status"].str.lower().eq("unsanctioned"))
@@ -182,11 +242,16 @@ def add_features(
     df["is_high_value_project"] = yes_no_mask(df["is_high_value_project_bool"])
 
     df["possible_text_duplicate"] = yes_no_mask(
-        (df["same_work_same_locality_count"] > 1)
-        | (df["is_exact_duplicate_candidate"].str.lower().eq("true"))
+        (df["same_work_same_duplicate_location_count"] > 1)
+        | (df["location_duplicate_group_count"] > 1)
+    )
+    df["possible_type_location_duplicate"] = yes_no_mask(
+        df["duplicate_location_key"].astype(bool)
+        & df["category_key"].astype(bool)
+        & (df["same_type_location_month_count"] > 1)
     )
     df["possible_cost_outlier"] = yes_no_mask(
-        (df["amount_vs_state_category_median_ratio"] >= 3.0)
+        (strongest_location_amount_ratio >= COST_OUTLIER_MEDIAN_RATIO_THRESHOLD)
         | (df["amount_vs_category_median_ratio"] >= 4.0)
         | (df["is_high_value_project_bool"] & (df["amount_vs_state_category_median_ratio"] >= 2.0))
     )
@@ -204,12 +269,16 @@ def add_features(
 
     df["duplicate_risk_score"] = (
         (df["possible_text_duplicate"].eq("true") * 65)
-        + (df["same_work_same_locality_count"].clip(0, 5) * 7)
-        + (pd.to_numeric(df["exact_duplicate_group_count"], errors="coerce").fillna(0).clip(0, 5) * 3)
+        + (df["possible_type_location_duplicate"].eq("true") * 55)
+        + (df["same_work_same_duplicate_location_count"].clip(0, 5) * 7)
+        + (df["same_type_location_month_count"].clip(0, 5) * 5)
+        + (df["same_category_same_locality_count"].clip(0, 5) * 2)
+        + (df["same_category_same_block_count"].clip(0, 10) * 1)
+        + (df["location_duplicate_group_count"].clip(0, 5) * 3)
     ).clip(0, 100)
     df["cost_risk_score"] = (
         (df["possible_cost_outlier"].eq("true") * 75)
-        + ((df["amount_vs_state_category_median_ratio"] - 1).clip(0, 5) * 5)
+        + ((strongest_location_amount_ratio - 1).clip(0, 5) * 5)
     ).clip(0, 100).round(2)
     df["split_sanction_risk_score"] = (
         (df["possible_split_sanction"].eq("true") * 85)
@@ -228,17 +297,34 @@ def add_features(
         + 0.20 * df["split_sanction_risk_score"]
         + 0.10 * df["pending_risk_score"]
     ).round(2)
+    major_anomaly = (
+        df["duplicate_risk_score"].ge(65)
+        | df["cost_risk_score"].ge(75)
+        | df["split_sanction_risk_score"].ge(60)
+    )
+    df["risk_score_rule_based"] = df["risk_score_rule_based"].where(
+        ~major_anomaly,
+        df["risk_score_rule_based"].clip(lower=30),
+    )
     df["risk_level_rule_based"] = pd.cut(
         df["risk_score_rule_based"],
         bins=[-1, 29.999, 65, 100],
         labels=["GREEN", "YELLOW", "RED"],
     ).astype(str)
 
-    df["weak_label_any_risk"] = yes_no_mask(df["risk_level_rule_based"].isin(["YELLOW", "RED"]))
-    df["weak_label_duplicate"] = df["possible_text_duplicate"]
+    df["weak_label_duplicate"] = yes_no_mask(
+        df["possible_text_duplicate"].eq("true")
+        | df["possible_type_location_duplicate"].eq("true")
+    )
     df["weak_label_cost_outlier"] = df["possible_cost_outlier"]
     df["weak_label_split_sanction"] = df["possible_split_sanction"]
     df["weak_label_pending"] = df["possible_pending_risk"]
+    df["weak_label_any_risk"] = yes_no_mask(
+        df["risk_level_rule_based"].isin(["YELLOW", "RED"])
+        | df["weak_label_duplicate"].eq("true")
+        | df["weak_label_cost_outlier"].eq("true")
+        | df["weak_label_split_sanction"].eq("true")
+    )
 
     df = df.drop(columns=["recommended_date_dt", "is_sub_5_lakh_bool", "is_near_5_lakh_bool", "is_high_value_project_bool"])
     return df
@@ -317,7 +403,7 @@ def main() -> None:
             "Features are derived from cleaned MPLADS rows and MP allocation limits.",
             "Labels are weak/rule-based review targets, not confirmed fraud labels.",
             "Test amount median ratios are computed from train medians to avoid test leakage.",
-            "Geospatial features are intentionally omitted until latitude/longitude are added.",
+            "Duplicate-location features use normalized locality+ward names until latitude/longitude are added.",
         ],
         "frontend_metric_candidates": [
             "risk_level_rule_based",
@@ -329,6 +415,7 @@ def main() -> None:
             "mp_name_canonical",
             "ida",
             "possible_text_duplicate",
+            "possible_type_location_duplicate",
             "possible_cost_outlier",
             "possible_split_sanction",
             "possible_pending_risk",

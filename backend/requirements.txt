@@ -9,6 +9,7 @@ numpy>=1.26
 
 # Next-phase ML/GIS dependencies.
 scikit-learn>=1.5
+joblib>=1.4
 sentence-transformers>=3.0
 geopy>=2.4
 SQLAlchemy>=2.0

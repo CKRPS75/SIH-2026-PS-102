@@ -2,16 +2,16 @@
   "train": {
     "rows": 48287,
     "risk_level_counts": {
-      "GREEN": 33908,
-      "YELLOW": 13996,
-      "RED": 383
+      "GREEN": 26266,
+      "YELLOW": 20311,
+      "RED": 1710
     },
     "weak_label_counts": {
-      "duplicate": 12430,
-      "cost_outlier": 4695,
+      "duplicate": 17215,
+      "cost_outlier": 7162,
       "split_sanction": 249,
       "pending": 31134,
-      "any_risk": 14379
+      "any_risk": 22021
     },
     "amount_summary": {
       "min": 0.0,
@@ -23,16 +23,16 @@
   "test": {
     "rows": 12072,
     "risk_level_counts": {
-      "GREEN": 9938,
-      "YELLOW": 2095,
-      "RED": 39
+      "GREEN": 8655,
+      "YELLOW": 3258,
+      "RED": 159
     },
     "weak_label_counts": {
-      "duplicate": 1354,
-      "cost_outlier": 1171,
+      "duplicate": 1872,
+      "cost_outlier": 1801,
       "split_sanction": 30,
       "pending": 7761,
-      "any_risk": 2134
+      "any_risk": 3417
     },
     "amount_summary": {
       "min": 0.0,
@@ -45,7 +45,7 @@
     "Features are derived from cleaned MPLADS rows and MP allocation limits.",
     "Labels are weak/rule-based review targets, not confirmed fraud labels.",
     "Test amount median ratios are computed from train medians to avoid test leakage.",
-    "Geospatial features are intentionally omitted until latitude/longitude are added."
+    "Duplicate-location features use normalized locality+ward names until latitude/longitude are added."
   ],
   "frontend_metric_candidates": [
     "risk_level_rule_based",
@@ -57,6 +57,7 @@
     "mp_name_canonical",
     "ida",
     "possible_text_duplicate",
+    "possible_type_location_duplicate",
     "possible_cost_outlier",
     "possible_split_sanction",
     "possible_pending_risk"

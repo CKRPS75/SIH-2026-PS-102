@@ -11,6 +11,11 @@ function RiskAuditSheet({ project, onClose }: { project: Project; onClose: () =>
   const [tab, setTab] = useState<AuditTab>("overview");
   const [action, setAction] = useState<ModalAction>(null);
   const rc = riskColor(project.risk);
+  const duplicateScore = project.duplicateScore ?? (project.anomaly === "Duplicate" ? project.risk : 0);
+  const financialScore = project.financialScore ?? (project.anomaly === "Overpricing" ? project.risk : 0);
+  const splitScore = project.splitSanctionScore ?? (project.anomaly === "Split Sanction" ? project.risk : 0);
+  const pendingScore = project.pendingScore ?? (project.anomaly === "Pending Approval" ? 45 : 0);
+  const explanation = project.description || "No detailed explanation is available for this project.";
 
   const tabs: { key: AuditTab; label: string }[] = [
     { key: "overview", label: "Overview" },
@@ -79,10 +84,10 @@ function RiskAuditSheet({ project, onClose }: { project: Project; onClose: () =>
             <>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { l: "Duplicate Match", v: project.anomaly === "Duplicate" ? "87%" : "N/A", danger: project.anomaly === "Duplicate" },
-                  { l: "BSR Inflation", v: project.anomaly === "Overpricing" ? "337%" : "Normal", danger: project.anomaly === "Overpricing" },
-                  { l: "Geofence", v: project.anomaly === "Duplicate" ? "180m" : "Clear", danger: project.anomaly === "Duplicate" },
-                  { l: "Vendor Risk", v: project.risk >= 70 ? "Elevated" : "Normal", danger: project.risk >= 70 },
+                  { l: "Duplicate", v: duplicateScore >= 65 ? `${Math.round(duplicateScore)}%` : "Clear", danger: duplicateScore >= 65 },
+                  { l: "Financial", v: financialScore >= 45 ? `${Math.round(financialScore)}%` : "Normal", danger: financialScore >= 45 },
+                  { l: "Split Sanction", v: splitScore >= 60 ? `${Math.round(splitScore)}%` : "Clear", danger: splitScore >= 60 },
+                  { l: "Admin Status", v: pendingScore > 0 ? "Pending" : "Clear", danger: pendingScore > 0 && project.status !== "VERIFIED" },
                 ].map((f) => (
                   <div key={f.l} className="rounded-2xl p-3" style={{ background: f.danger ? "#FFDAD6" : "#D4F8E8" }}>
                     <div className="text-[10px] font-medium mb-0.5" style={{ color: f.danger ? "#410002" : "#002116", opacity: 0.7 }}>{f.l}</div>
@@ -93,10 +98,7 @@ function RiskAuditSheet({ project, onClose }: { project: Project; onClose: () =>
               <div className="rounded-2xl p-4" style={{ background: "#FFF8E1" }}>
                 <div className="text-xs font-semibold mb-1.5" style={{ color: "#7C4F00" }}>Why was this flagged?</div>
                 <div className="text-xs leading-relaxed" style={{ color: "#49454F" }}>
-                  {project.anomaly === "Duplicate" && "AI detected 87% semantic similarity with TRAP-002 located 180m away. Both proposals share the same contractor and were submitted within 2 days."}
-                  {project.anomaly === "Overpricing" && "Requested cost of ₹35.0L is 337% above the official BSR benchmark of ₹8.0L for equivalent solar street-light installations."}
-                  {project.anomaly === "Split Sanction" && "Project amount of ₹4.9L appears to be a split component of a larger sanctioned work, circumventing the ₹5L single-sanction ceiling."}
-                  {project.anomaly === "None" && "No anomalies detected. Project cost, description, and geolocation are within acceptable ranges."}
+                  {explanation}
                 </div>
               </div>
             </>
@@ -112,18 +114,16 @@ function RiskAuditSheet({ project, onClose }: { project: Project; onClose: () =>
                   <div className="text-xs" style={{ color: "#49454F" }}>{project.description}</div>
                   <div className="text-[10px] font-mono mt-2" style={{ color: "#79747E" }}>{project.coords}</div>
                 </div>
-                <div className="flex justify-center">
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="w-0.5 h-4 rounded" style={{ background: "#B3261E" }} />
-                    <div className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: "#FFDAD6", color: "#B3261E" }}>87% match · 180m apart</div>
-                    <div className="w-0.5 h-4 rounded" style={{ background: "#B3261E" }} />
+                <div className="rounded-2xl p-4" style={{ background: duplicateScore >= 65 ? "#FFDAD6" : "#D4F8E8" }}>
+                  <div className="text-[9px] font-mono font-semibold mb-1 uppercase tracking-wider" style={{ color: duplicateScore >= 65 ? "#B3261E" : "#006C4C" }}>
+                    {duplicateScore >= 65 ? "Possible Duplicate" : "No Major Duplicate"}
                   </div>
-                </div>
-                <div className="rounded-2xl p-4" style={{ background: "#FFDAD6" }}>
-                  <div className="text-[9px] font-mono font-semibold mb-1 uppercase tracking-wider" style={{ color: "#B3261E" }}>Similar Proposal — POSSIBLE DUPLICATE</div>
-                  <div className="text-sm font-medium mb-1" style={{ color: "#1C1B1F" }}>Samaj Bhavan Kurla</div>
-                  <div className="text-xs" style={{ color: "#410002" }}>Construction of Community Hall at Kurla East for public gatherings and social functions.</div>
-                  <div className="text-[10px] font-mono mt-2" style={{ color: "#79747E" }}>19.0730° N, 72.8828° E</div>
+                  <div className="text-sm font-black mb-1" style={{ color: duplicateScore >= 65 ? "#B3261E" : "#006C4C" }}>{Math.round(duplicateScore)}%</div>
+                  <div className="text-xs" style={{ color: duplicateScore >= 65 ? "#410002" : "#002116" }}>
+                    {duplicateScore >= 65
+                      ? "The project crossed the duplicate threshold using same-work or same-category matching in the same locality and ward."
+                      : "This project did not cross the duplicate threshold. Low grouping counts are not treated as duplicate fraud."}
+                  </div>
                 </div>
               </div>
             </>
@@ -146,22 +146,22 @@ function RiskAuditSheet({ project, onClose }: { project: Project; onClose: () =>
                 <div>
                   <div className="flex justify-between text-[10px] mb-1" style={{ color: "#49454F" }}><span>Requested</span><span>{project.amount}</span></div>
                   <div className="h-4 rounded-full overflow-hidden" style={{ background: "#ECE6F0" }}>
-                    <div className="h-full rounded-full" style={{ background: "#B3261E", width: project.anomaly === "Overpricing" ? "100%" : "50%" }} />
+                    <div className="h-full rounded-full" style={{ background: financialScore >= 45 ? "#B3261E" : "#F59E0B", width: `${Math.max(12, Math.min(financialScore, 100))}%` }} />
                   </div>
                 </div>
                 <div>
                   <div className="flex justify-between text-[10px] mb-1" style={{ color: "#49454F" }}><span>BSR</span><span>{project.bsr}</span></div>
                   <div className="h-4 rounded-full overflow-hidden" style={{ background: "#ECE6F0" }}>
-                    <div className="h-full rounded-full" style={{ background: "#006C4C", width: project.anomaly === "Overpricing" ? "23%" : "60%" }} />
+                    <div className="h-full rounded-full" style={{ background: "#006C4C", width: financialScore >= 45 ? "45%" : "70%" }} />
                   </div>
                 </div>
               </div>
-              {project.anomaly === "Overpricing" && (
+              {financialScore >= 45 && (
                 <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: "#FFDAD6" }}>
-                  <span className="text-3xl font-black" style={{ color: "#B3261E" }}>337%</span>
+                  <span className="text-3xl font-black" style={{ color: "#B3261E" }}>{Math.round(financialScore)}%</span>
                   <div>
-                    <div className="text-xs font-bold" style={{ color: "#B3261E" }}>Inflation Detected</div>
-                    <div className="text-xs" style={{ color: "#410002" }}>Significantly exceeds regional benchmark.</div>
+                    <div className="text-xs font-bold" style={{ color: "#B3261E" }}>Financial Anomaly Detected</div>
+                    <div className="text-xs" style={{ color: "#410002" }}>The amount crossed the trained median-ratio threshold.</div>
                   </div>
                 </div>
               )}
