@@ -4,6 +4,7 @@ import { riskColor } from "../utils/helpers";
 import { Chip } from "../components/common/Chip";
 import { Card } from "../components/common/Card";
 import { RiskChip } from "../components/common/RiskChip";
+import { RiskIntelligenceMap } from "../components/common/RiskIntelligenceMap";
 
 // ── Home Screen ───────────────────────────────────────────────────────────────
 
@@ -452,44 +453,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
               <div className="text-sm font-semibold" style={{ fontFamily: "'Google Sans', sans-serif", color: "#1C1B1F" }}>Risk Intelligence Map</div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full" style={{ background: "#ECE6F0", color: "#49454F" }}>Mumbai</span>
             </div>
-            <div className="relative rounded-2xl overflow-hidden" style={{ height: 180, background: "#0F172A" }}>
-              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 300 180">
-                <defs>
-                  <pattern id="g2" width="20" height="20" patternUnits="userSpaceOnUse">
-                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1E293B" strokeWidth="0.5"/>
-                  </pattern>
-                </defs>
-                <rect width="300" height="180" fill="url(#g2)"/>
-                <path d="M50,20 L120,25 L140,70 L120,120 L70,130 L30,110 L25,60 Z" fill="none" stroke="#334155" strokeWidth="1.5"/>
-                <path d="M120,25 L170,40 L175,85 L140,100 L120,120 Z" fill="none" stroke="#334155" strokeWidth="1"/>
-                <ellipse cx="195" cy="120" rx="30" ry="45" fill="#0F172A" stroke="#1E3A5F" strokeWidth="1"/>
-                <text x="184" y="125" fill="#1E3A5F" fontSize="7" fontFamily="Roboto">Arabian Sea</text>
-                <text x="60" y="75" fill="#475569" fontSize="8" fontFamily="Roboto">Kurla</text>
-                <text x="85" y="45" fill="#475569" fontSize="8" fontFamily="Roboto">Andheri</text>
-                <text x="120" y="65" fill="#475569" fontSize="8" fontFamily="Roboto">Chembur</text>
-                <text x="38" y="100" fill="#475569" fontSize="8" fontFamily="Roboto">Dharavi</text>
-              </svg>
-              {/* Map pins */}
-              {filtered.slice(0, 6).map((p, index) => (
-                <button
-                  key={p.id}
-                  onClick={() => onOpenAudit(p)}
-                  className="absolute -translate-x-1/2 -translate-y-1/2"
-                  style={{ left: mapPositions[index].x, top: mapPositions[index].y }}
-                >
-                  <div className="w-4 h-4 rounded-full border-2 border-white shadow-lg transition-transform active:scale-125" style={{ background: riskColor(p.risk).dot }} />
-                </button>
-              ))}
-              {/* Legend */}
-              <div className="absolute bottom-2 left-2 flex gap-2 rounded-xl px-2.5 py-1.5" style={{ background: "rgba(15,23,42,0.85)" }}>
-                {[["#10B981","Safe"],["#F59E0B","Review"],["#B3261E","High"]].map(([c,l]) => (
-                  <div key={l} className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full" style={{ background: c }}/>
-                    <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.7)" }}>{l}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <RiskIntelligenceMap projects={filtered} onOpenAudit={onOpenAudit} />
           </div>
         </Card>
       </div>
