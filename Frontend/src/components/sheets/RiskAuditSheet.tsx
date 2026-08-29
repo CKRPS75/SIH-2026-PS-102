@@ -7,7 +7,15 @@ import { riskColor } from "../../utils/helpers";
 type AuditTab = "overview" | "duplicate" | "cost" | "vendor";
 type ModalAction = null | "approved" | "field" | "freeze-confirm" | "frozen";
 
-function RiskAuditSheet({ project, onClose }: { project: Project; onClose: () => void }) {
+function RiskAuditSheet({
+  project,
+  onClose,
+  onRequestFieldAudit,
+}: {
+  project: Project;
+  onClose: () => void;
+  onRequestFieldAudit: (project: Project) => void;
+}) {
   const [tab, setTab] = useState<AuditTab>("overview");
   const [action, setAction] = useState<ModalAction>(null);
   const rc = riskColor(project.risk);
@@ -23,6 +31,12 @@ function RiskAuditSheet({ project, onClose }: { project: Project; onClose: () =>
     { key: "cost", label: "Cost" },
     { key: "vendor", label: "Vendors" },
   ];
+
+  function handleFieldAudit() {
+    onRequestFieldAudit(project);
+    setAction("field");
+    window.setTimeout(onClose, 700);
+  }
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col justify-end animate-fade-in" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
@@ -200,7 +214,7 @@ function RiskAuditSheet({ project, onClose }: { project: Project; onClose: () =>
 
           {/* Action feedback */}
           {action === "approved" && <div className="rounded-2xl p-4 text-center animate-scale-in" style={{ background: "#D4F8E8" }}><div className="font-semibold text-sm" style={{ color: "#006C4C" }}>✓ Approved & Fast-Tracked</div><div className="text-xs mt-1" style={{ color: "#49454F" }}>PFMS disbursement queue updated.</div></div>}
-          {action === "field" && <div className="rounded-2xl p-4 text-center animate-scale-in" style={{ background: "#FFEFD6" }}><div className="font-semibold text-sm" style={{ color: "#7C4F00" }}>Field Inspection Requested</div><div className="text-xs mt-1" style={{ color: "#49454F" }}>Assigned to nearest field officer team.</div></div>}
+          {action === "field" && <div className="rounded-2xl p-4 text-center animate-scale-in" style={{ background: "#FFEFD6" }}><div className="font-semibold text-sm" style={{ color: "#7C4F00" }}>Field Inspection Requested</div><div className="text-xs mt-1" style={{ color: "#49454F" }}>This project was added to the Field Inspector queue.</div></div>}
           {action === "freeze-confirm" && (
             <div className="rounded-2xl p-4 animate-scale-in" style={{ background: "#FFDAD6" }}>
               <div className="font-semibold text-sm mb-3" style={{ color: "#B3261E" }}>Freeze payment for this project?</div>
@@ -217,7 +231,7 @@ function RiskAuditSheet({ project, onClose }: { project: Project; onClose: () =>
         {!action && (
           <div className="p-4 pt-0 flex gap-2 shrink-0">
             <button onClick={() => setAction("approved")} className="flex-1 h-10 rounded-xl text-xs font-semibold md-ripple" style={{ background: "#D4F8E8", color: "#006C4C" }}>Approve</button>
-            <button onClick={() => setAction("field")} className="flex-1 h-10 rounded-xl text-xs font-semibold md-ripple" style={{ background: "#FFEFD6", color: "#7C4F00" }}>Field Audit</button>
+            <button onClick={handleFieldAudit} className="flex-1 h-10 rounded-xl text-xs font-semibold md-ripple" style={{ background: "#FFEFD6", color: "#7C4F00" }}>Field Audit</button>
             <button onClick={() => setAction("freeze-confirm")} className="flex-1 h-10 rounded-xl text-xs font-semibold md-ripple" style={{ background: "#FFDAD6", color: "#B3261E" }}>Suspend</button>
           </div>
         )}
