@@ -14,9 +14,21 @@ import { BottomNav } from "./components/navigation/BottomNav";
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
+const FIELD_ASSIGNMENTS_KEY = "mplads-field-assignments";
+
+function loadFieldAssignments(): Project[] {
+  try {
+    const stored = window.localStorage.getItem(FIELD_ASSIGNMENTS_KEY);
+    return stored ? JSON.parse(stored) as Project[] : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
   const [projects, setProjects] = useState<Project[]>([]);
+  const [fieldAssignments, setFieldAssignments] = useState<Project[]>(loadFieldAssignments);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [auditProject, setAuditProject] = useState<Project | null>(null);
@@ -29,6 +41,18 @@ export default function App() {
       .catch(requestError => setError(requestError instanceof Error ? requestError.message : "Unable to load projects"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(FIELD_ASSIGNMENTS_KEY, JSON.stringify(fieldAssignments));
+  }, [fieldAssignments]);
+
+  function handleRequestFieldAudit(project: Project) {
+    setFieldAssignments(current => {
+      if (current.some(assigned => assigned.id === project.id)) return current;
+      return [project, ...current];
+    });
+    setTab("field");
+  }
 
   return (
     <div className="min-h-full flex items-center justify-center p-4" style={{ background: "#1a1a2e" }}>
@@ -66,10 +90,16 @@ export default function App() {
           {!loading && !error && tab === "home" && <HomeScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
           {!loading && !error && tab === "audits" && <AuditsScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
           {!loading && !error && tab === "judge" && <JudgeScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
-          {tab === "field" && <FieldScreen />}
+          {tab === "field" && <FieldScreen assignments={fieldAssignments} />}
 
           {/* Bottom sheets */}
-          {auditProject && <RiskAuditSheet project={auditProject} onClose={() => setAuditProject(null)} />}
+          {auditProject && (
+            <RiskAuditSheet
+              project={auditProject}
+              onClose={() => setAuditProject(null)}
+              onRequestFieldAudit={handleRequestFieldAudit}
+            />
+          )}
           {showNotif && <NotifSheet onClose={() => setShowNotif(false)} />}
           {showProfile && <ProfileSheet onClose={() => setShowProfile(false)} />}
         </div>
