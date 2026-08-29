@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Project } from "../../data/projects";
-import { riskColor } from "../../utils/helpers";
+import { riskColor, sanitizeAuditText } from "../../utils/helpers";
 
 // ── Risk Audit Bottom Sheet ───────────────────────────────────────────────────
 
@@ -22,8 +22,7 @@ function RiskAuditSheet({
   const duplicateScore = project.duplicateScore ?? (project.anomaly === "Duplicate" ? project.risk : 0);
   const financialScore = project.financialScore ?? (project.anomaly === "Overpricing" ? project.risk : 0);
   const splitScore = project.splitSanctionScore ?? (project.anomaly === "Split Sanction" ? project.risk : 0);
-  const pendingScore = project.pendingScore ?? (project.anomaly === "Pending Approval" ? 45 : 0);
-  const explanation = project.description || "No detailed explanation is available for this project.";
+  const explanation = sanitizeAuditText(project.description) || "No detailed explanation is available for this project.";
 
   const tabs: { key: AuditTab; label: string }[] = [
     { key: "overview", label: "Overview" },
@@ -50,7 +49,7 @@ function RiskAuditSheet({
         <div className="px-5 pb-3 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[10px] font-mono" style={{ color: "#49454F" }}>{project.id}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>Audit case</div>
               <div className="text-lg font-semibold mt-0.5" style={{ fontFamily: "'Google Sans', sans-serif", color: "#1C1B1F" }}>{project.title}</div>
             </div>
             <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center md-ripple" style={{ background: "#ECE6F0" }}>
@@ -101,7 +100,6 @@ function RiskAuditSheet({
                   { l: "Duplicate", v: duplicateScore >= 65 ? `${Math.round(duplicateScore)}%` : "Clear", danger: duplicateScore >= 65 },
                   { l: "Financial", v: financialScore >= 45 ? `${Math.round(financialScore)}%` : "Normal", danger: financialScore >= 45 },
                   { l: "Split Sanction", v: splitScore >= 60 ? `${Math.round(splitScore)}%` : "Clear", danger: splitScore >= 60 },
-                  { l: "Admin Status", v: pendingScore > 0 ? "Pending" : "Clear", danger: pendingScore > 0 && project.status !== "VERIFIED" },
                 ].map((f) => (
                   <div key={f.l} className="rounded-2xl p-3" style={{ background: f.danger ? "#FFDAD6" : "#D4F8E8" }}>
                     <div className="text-[10px] font-medium mb-0.5" style={{ color: f.danger ? "#410002" : "#002116", opacity: 0.7 }}>{f.l}</div>
@@ -111,7 +109,7 @@ function RiskAuditSheet({
               </div>
               <div className="rounded-2xl p-4" style={{ background: "#FFF8E1" }}>
                 <div className="text-xs font-semibold mb-1.5" style={{ color: "#7C4F00" }}>Why was this flagged?</div>
-                <div className="text-xs leading-relaxed" style={{ color: "#49454F" }}>
+                <div className="text-xs leading-relaxed whitespace-pre-line" style={{ color: "#49454F" }}>
                   {explanation}
                 </div>
               </div>
@@ -125,7 +123,7 @@ function RiskAuditSheet({
                 <div className="rounded-2xl p-4" style={{ background: "#ECE6F0" }}>
                   <div className="text-[9px] font-mono font-semibold mb-1 uppercase tracking-wider" style={{ color: "#49454F" }}>Current Proposal</div>
                   <div className="text-sm font-medium mb-1" style={{ color: "#1C1B1F" }}>{project.title}</div>
-                  <div className="text-xs" style={{ color: "#49454F" }}>{project.description}</div>
+                  <div className="text-xs whitespace-pre-line" style={{ color: "#49454F" }}>{explanation}</div>
                   <div className="text-[10px] font-mono mt-2" style={{ color: "#79747E" }}>{project.coords}</div>
                 </div>
                 <div className="rounded-2xl p-4" style={{ background: duplicateScore >= 65 ? "#FFDAD6" : "#D4F8E8" }}>
@@ -135,8 +133,8 @@ function RiskAuditSheet({
                   <div className="text-sm font-black mb-1" style={{ color: duplicateScore >= 65 ? "#B3261E" : "#006C4C" }}>{Math.round(duplicateScore)}%</div>
                   <div className="text-xs" style={{ color: duplicateScore >= 65 ? "#410002" : "#002116" }}>
                     {duplicateScore >= 65
-                      ? "The project crossed the duplicate threshold using same-work or same-category matching in the same locality and ward."
-                      : "This project did not cross the duplicate threshold. Low grouping counts are not treated as duplicate fraud."}
+                      ? "A similar work appears in the same locality and ward, so this case should be checked before approval."
+                      : "No strong duplicate warning was found for this case."}
                   </div>
                 </div>
               </div>
@@ -175,7 +173,7 @@ function RiskAuditSheet({
                   <span className="text-3xl font-black" style={{ color: "#B3261E" }}>{Math.round(financialScore)}%</span>
                   <div>
                     <div className="text-xs font-bold" style={{ color: "#B3261E" }}>Financial Anomaly Detected</div>
-                    <div className="text-xs" style={{ color: "#410002" }}>The amount crossed the trained median-ratio threshold.</div>
+                    <div className="text-xs" style={{ color: "#410002" }}>The requested amount is much higher than similar past work.</div>
                   </div>
                 </div>
               )}

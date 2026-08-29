@@ -98,6 +98,39 @@ class JsonEvaluationServiceTest(unittest.TestCase):
         self.assertGreaterEqual(result.component_scores["duplicate"], 65)
         self.assertIn("locality and ward", " ".join(result.reasons).lower())
         self.assertIn("duplicate", result.comment.lower())
+        self.assertNotIn("TEST-REF", result.reason_description)
+        self.assertEqual(result.references["duplicates"][0].project_key, "Redacted reference")
+        self.assertGreaterEqual(result.references["duplicates"][0].similarity, 0.80)
+
+    def test_same_location_different_work_is_not_duplicate(self) -> None:
+        existing_project = {
+            "project_key": "TEST-ROAD",
+            "mp_name": "Demo MP",
+            "state": "Maharashtra",
+            "constituency": "Mumbai North East",
+            "ida": "District Planning Office",
+            "category": "Community Infrastructure",
+            "work_clean": "Repair of internal road",
+            "locality": "Kurla West",
+            "ward": "12",
+            "block": "Kurla",
+            "recommended_date": "2026-08-09",
+            "status": "Sanctioned",
+            "ida_approval": "Approved",
+            "allocation_amount_numeric": 300000,
+        }
+        self.mock_records_path.write_text(json.dumps([existing_project]), encoding="utf-8")
+        proposal = {
+            **existing_project,
+            "project_key": "TEST-EQUIP",
+            "work_clean": "Purchase of medical equipment",
+            "recommended_date": "2026-08-10",
+        }
+
+        result = self._service().evaluate(ProjectEvaluationInput(**proposal))
+
+        self.assertLess(result.component_scores["duplicate"], 65)
+        self.assertEqual(result.references["duplicates"], [])
 
 
 if __name__ == "__main__":

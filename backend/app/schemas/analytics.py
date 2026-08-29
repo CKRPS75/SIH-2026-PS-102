@@ -33,6 +33,42 @@ class StateRiskRow(BaseModel):
     pending_count: int
 
 
+class DuplicateProjectPair(BaseModel):
+    pair_label: str
+    first_work: str
+    second_work: str
+    first_amount: float = 0.0
+    second_amount: float = 0.0
+    first_date: str | None = None
+    second_date: str | None = None
+    similarity: float
+
+
+class DuplicateLocationRow(BaseModel):
+    location_key: str
+    state: str
+    constituency: str
+    locality: str
+    ward: str
+    total_project_count: int
+    duplicate_candidate_project_count: int
+    duplicate_pair_count: int
+    duplicate_rate: float
+    average_similarity: float
+    maximum_similarity: float
+    flagged_allocation_amount: float
+    confidence: str
+    embedding_backend: str
+    pairs: list[DuplicateProjectPair] = Field(default_factory=list)
+
+
+class DuplicateLocationAnalyticsResponse(BaseModel):
+    total_locations: int
+    similarity_threshold: float
+    min_projects_for_confidence: int
+    rows: list[DuplicateLocationRow]
+
+
 class PredictionRow(BaseModel):
     project_key: str
     mp_name: str | None = None
@@ -97,6 +133,7 @@ class EvaluationReference(BaseModel):
     recommended_date: str | None = None
     source_dataset: str
     match_type: str
+    similarity: float | None = None
 
 
 class JsonEvaluationResponse(BaseModel):

@@ -14,4 +14,18 @@ function statusLabel(status: Project["status"]) {
   return { bg: "#D4F8E8", text: "#006C4C" };
 }
 
-export { riskColor, statusLabel };
+function sanitizeAuditText(value: string | undefined | null): string {
+  if (!value) return "";
+  return value
+    .replace(/\b(?:MPLADS|TEST|LIVE|PROJECT|REF|P)[-_]?[A-Z0-9][A-Z0-9-_]{2,}\b/gi, "redacted reference")
+    .replace(/\b[a-f0-9]{16}\b/gi, "redacted reference")
+    .replace(/\bproject[_\s-]*key\b/gi, "reference")
+    .replace(/\bIsolationForest\b/g, "AI pattern model")
+    .replace(/\blocality\+ward\b/gi, "same locality and ward")
+    .replace(/\bsame-work-type\b/gi, "similar work type")
+    .replace(/\bsame-work\b/gi, "similar work")
+    .replace(/\bnear-Rs-5L\b/gi, "near-Rs 5 lakh")
+    .trim();
+}
+
+export { riskColor, sanitizeAuditText, statusLabel };

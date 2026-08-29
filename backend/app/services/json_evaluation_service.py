@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from joblib import load
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 from app.schemas.analytics import EvaluationReference, JsonEvaluationResponse, ProjectEvaluationInput
 
@@ -18,6 +21,7 @@ MOCK_RECORDS_PATH = BASE_DIR / "data" / "mock" / "mock_input_records.json"
 TRAIN_PREDICTIONS_PATH = MODEL_OUTPUT_DIR / "train_predictions.csv"
 ISOLATION_FOREST_MODEL_PATH = MODEL_OUTPUT_DIR / "isolation_forest_model.joblib"
 COST_OUTLIER_MEDIAN_RATIO_THRESHOLD = 2.5
+DUPLICATE_SIMILARITY_THRESHOLD = 0.80
 
 
 def _text(value: Any) -> str:
@@ -65,22 +69,22 @@ def _flag_color(level: str) -> str:
 
 def _comment(level: str, reasons: list[str] | None = None) -> str:
     if level == "RED":
-        return "High-risk anomaly. Send this project for audit before approval."
+        return "This proposal looks risky and should be checked before approval."
     if level == "YELLOW":
         reason_text = " ".join(reasons or []).lower()
-        if "near-rs-5l" in reason_text:
-            return "Possible split-sanction pattern. Review related near-Rs-5L projects before approval."
-        if "allocation amount is high" in reason_text or "financial pattern" in reason_text:
-            return "Possible financial anomaly. Amount is unusual against trained baselines."
+        if "5 lakh" in reason_text or "split" in reason_text or "small proposals" in reason_text:
+            return "This may be one large work split into smaller proposals."
+        if "amount is high" in reason_text or "amount is higher" in reason_text or "spending pattern" in reason_text:
+            return "The requested amount looks higher than similar past work."
         if "locality and ward" in reason_text:
-            return "Possible duplicate project pattern in the same locality and ward."
-        return "Review required. At least one important anomaly signal crossed the threshold."
-    return "No major anomaly found against the current trained and mock reference data."
+            return "Possible duplicate: similar work already appears in the same locality and ward."
+        return "This proposal needs a manual check before approval."
+    return "This proposal looks normal based on the available records."
 
 
-def _reference_from_row(row: pd.Series, match_type: str) -> EvaluationReference:
+def _reference_from_row(row: pd.Series, match_type: str, similarity: float | None = None) -> EvaluationReference:
     return EvaluationReference(
-        project_key=_text(row.get("project_key")) or "UNKNOWN",
+        project_key="Redacted reference",
         work_clean=_text(row.get("work_clean")) or "Untitled project",
         amount=_number(row.get("allocation_amount_numeric")),
         state=_text(row.get("state")) or None,
@@ -90,6 +94,7 @@ def _reference_from_row(row: pd.Series, match_type: str) -> EvaluationReference:
         recommended_date=_text(row.get("recommended_date")) or None,
         source_dataset=_text(row.get("source_dataset")) or "reference",
         match_type=match_type,
+        similarity=similarity,
     )
 
 
@@ -107,6 +112,9 @@ class JsonEvaluationService:
         self._reference_rows: pd.DataFrame | None = None
         self._isolation_forest_cache_key: float | None = None
         self._isolation_forest_bundle: dict[str, Any] | None = None
+        self._sbert_model: Any | None = None
+        self._sbert_failed = False
+        self._use_sentence_bert = os.getenv("MPLADS_USE_SENTENCE_BERT", "").strip().lower() in {"1", "true", "yes"}
 
     def evaluate(self, proposal: ProjectEvaluationInput) -> JsonEvaluationResponse:
         reference = self._reference()
@@ -136,17 +144,15 @@ class JsonEvaluationService:
         }
         strongest_ratio = max(ratios["category"], ratios["state_category"], ratios["constituency_category"])
 
-        same_work_location = reference[
-            reference["work_key"].eq(work_key) & reference["duplicate_location_key"].eq(duplicate_location_key)
-        ]
-        same_category_location = (
-            reference[
-                reference["work_type_key"].eq(work_type_key)
-                & reference["duplicate_location_key"].eq(duplicate_location_key)
-            ]
-            if work_type_key
-            else reference.iloc[0:0]
+        duplicate_matches = self._duplicate_matches(
+            reference=reference,
+            work_clean=row.get("work_clean"),
+            state_key=state_key,
+            constituency_key=constituency_key,
+            duplicate_location_key=duplicate_location_key,
         )
+        same_work_location = duplicate_matches
+        same_category_location = reference.iloc[0:0]
         same_type_location_month = (
             reference[
                 reference["mp_key"].eq(mp_key)
@@ -177,14 +183,13 @@ class JsonEvaluationService:
         exact_count = len(exact_location_amount) + (1 if work_key and duplicate_location_key and amount else 0)
         split_count = len(split_matches) + (1 if 450000 <= amount <= 500000 and duplicate_location_key else 0)
 
-        duplicate_score = min(
-            100.0,
-            (65 if same_work_count > 1 else 0)
-            + (55 if same_type_month_count > 1 else 0)
-            + (20 if exact_count > 1 else 0)
-            + min(same_work_count, 5) * 3
-            + min(same_type_month_count, 5) * 5
-            + min(same_category_count, 5) * 2,
+        max_duplicate_similarity = (
+            float(duplicate_matches["similarity"].max()) if not duplicate_matches.empty else 0.0
+        )
+        duplicate_score = (
+            min(100.0, 65 + (max_duplicate_similarity - DUPLICATE_SIMILARITY_THRESHOLD) * 175 + len(duplicate_matches) * 3)
+            if not duplicate_matches.empty
+            else 0.0
         )
         category_amounts = reference[reference["source_dataset"].eq("training")]["allocation_amount_numeric"]
         amount_p99 = float(category_amounts.quantile(0.99)) if not category_amounts.empty else 0.0
@@ -195,15 +200,15 @@ class JsonEvaluationService:
                 "amount_vs_state_category_median_ratio": ratios["state_category"],
                 "amount_vs_constituency_category_median_ratio": ratios["constituency_category"],
                 "project_amount_as_pct_of_mp_allocation": 0.0,
-                "same_work_same_locality_count": same_work_count,
-                "same_work_same_duplicate_location_count": same_work_count,
+                "same_work_same_locality_count": len(duplicate_matches),
+                "same_work_same_duplicate_location_count": len(duplicate_matches),
                 "same_work_same_block_count": 0.0,
                 "same_work_same_constituency_count": 0.0,
-                "same_category_same_locality_count": same_category_count,
+                "same_category_same_locality_count": 0.0,
                 "same_category_same_block_count": 0.0,
                 "same_category_same_constituency_count": 0.0,
-                "same_mp_category_locality_count": same_category_count if mp_key else 0.0,
-                "same_ida_category_locality_count": same_category_count if ida_key else 0.0,
+                "same_mp_category_locality_count": 0.0,
+                "same_ida_category_locality_count": 0.0,
                 "same_type_location_month_count": same_type_month_count,
                 "same_ida_locality_7day_sub5l_count": split_count if ida_key else 0.0,
                 "same_mp_locality_7day_sub5l_count": split_count if mp_key else 0.0,
@@ -250,9 +255,22 @@ class JsonEvaluationService:
             pending_score,
         )
         references = {
-            "financial": [_reference_from_row(match, "same category/area median reference") for _, match in financial_matches.head(5).iterrows()],
-            "duplicates": [_reference_from_row(match, "same work or inferred work type in same locality and ward") for _, match in pd.concat([same_work_location, same_category_location]).drop_duplicates("project_key").head(5).iterrows()],
-            "split_sanctions": [_reference_from_row(match, "near-Rs-5L same locality/ward time-window") for _, match in split_matches.head(5).iterrows()],
+            "financial": [
+                _reference_from_row(match, "similar work in the same area")
+                for _, match in financial_matches.head(10).iterrows()
+            ],
+            "duplicates": [
+                _reference_from_row(
+                    match,
+                    "similar work in the same locality and ward",
+                    similarity=round(float(match.get("similarity", 0.0)), 4),
+                )
+                for _, match in duplicate_matches.head(10).iterrows()
+            ],
+            "split_sanctions": [
+                _reference_from_row(match, "near-Rs 5 lakh work in the same locality and ward")
+                for _, match in split_matches.head(10).iterrows()
+            ],
         }
         reason_description = self._reason_description(
             model_reasons=model_reasons,
@@ -383,6 +401,65 @@ class JsonEvaluationService:
             candidates = candidates.sort_values("distance_to_baseline")
         return candidates
 
+    def _duplicate_matches(
+        self,
+        *,
+        reference: pd.DataFrame,
+        work_clean: Any,
+        state_key: str,
+        constituency_key: str,
+        duplicate_location_key: str,
+    ) -> pd.DataFrame:
+        work_text = _text(work_clean)
+        if not work_text or not state_key or not constituency_key or not duplicate_location_key:
+            return reference.iloc[0:0].copy()
+
+        candidates = reference[
+            reference["state_key"].eq(state_key)
+            & reference["constituency_key"].eq(constituency_key)
+            & reference["duplicate_location_key"].eq(duplicate_location_key)
+            & reference["work_clean"].map(_text).ne("")
+        ].copy()
+        if candidates.empty:
+            return candidates
+
+        similarities = self._text_similarity_against_candidates(work_text, candidates["work_clean"].tolist())
+        candidates["similarity"] = similarities
+        return candidates[candidates["similarity"].ge(DUPLICATE_SIMILARITY_THRESHOLD)].sort_values(
+            "similarity",
+            ascending=False,
+        )
+
+    def _text_similarity_against_candidates(self, work_text: str, candidate_texts: list[str]) -> list[float]:
+        model = self._sentence_bert_model()
+        if model is not None:
+            embeddings = model.encode([work_text, *candidate_texts], normalize_embeddings=True, show_progress_bar=False)
+            scores = np.asarray(embeddings[0:1]) @ np.asarray(embeddings[1:]).T
+            return [round(float(score), 4) for score in scores.ravel()]
+
+        try:
+            vectors = TfidfVectorizer(stop_words="english", ngram_range=(1, 2)).fit_transform(
+                [work_text, *candidate_texts]
+            )
+            scores = cosine_similarity(vectors[0:1], vectors[1:]).ravel()
+            return [round(float(score), 4) for score in scores]
+        except ValueError:
+            return [0.0 for _ in candidate_texts]
+
+    def _sentence_bert_model(self) -> Any | None:
+        if not self._use_sentence_bert or self._sbert_failed:
+            return None
+        if self._sbert_model is not None:
+            return self._sbert_model
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            self._sbert_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", local_files_only=True)
+            return self._sbert_model
+        except Exception:
+            self._sbert_failed = True
+            return None
+
     def _split_matches(
         self,
         reference: pd.DataFrame,
@@ -464,18 +541,48 @@ class JsonEvaluationService:
     ) -> list[str]:
         reasons = []
         if duplicate_score >= 65:
-            reasons.append("Repeated or similar work appears in the same locality and ward")
+            reasons.append("Similar work is already listed for this locality and ward")
         if rule_financial_score >= 45:
-            reasons.append("Allocation amount is high compared with trained category/state or constituency medians")
+            reasons.append("The requested amount is higher than similar past projects")
         if isolation_forest_risk >= 97:
-            reasons.append("Financial pattern is unusual against the trained IsolationForest distribution")
+            reasons.append("The spending pattern looks unusual compared with past records")
         if split_score >= 60:
-            reasons.append("Near-Rs-5L cluster appears within a short time window")
+            reasons.append("Several small proposals appear close together in the same area")
         if pending_score > 0:
-            reasons.append("Project is unsanctioned with action pending")
+            reasons.append("Approval is still pending")
         if not reasons:
-            reasons.append("No trained baseline threshold crossed")
+            reasons.append("No clear warning sign was found")
         return reasons
+
+    def _short_reason_sentence(
+        self,
+        *,
+        model_reasons: list[str],
+        amount: float,
+        baseline: float,
+        strongest_ratio: float,
+        counts: dict[str, int],
+    ) -> str:
+        if model_reasons == ["No clear warning sign was found"]:
+            return "No clear warning sign was found in the available records."
+
+        first_reason = model_reasons[0]
+        if "amount" in first_reason.lower() or "spending" in first_reason.lower():
+            if baseline:
+                return (
+                    f"The amount requested is about {strongest_ratio:.1f}x higher than similar past work, "
+                    "so the case needs a financial review."
+                )
+            return "The amount requested looks unusual, so the case needs a financial review."
+        if "similar work" in first_reason.lower():
+            return "A very similar work entry was found in the same locality and ward, so it may be a duplicate."
+        if "small proposals" in first_reason.lower():
+            return "Several small proposals appear close together in the same area, so they may be parts of one larger work."
+        if "approval" in first_reason.lower():
+            return "The approval is still pending, so the case should be checked before moving ahead."
+        if counts["same_work_location"] > 1:
+            return "A matching local record was found, so the case should be checked before approval."
+        return "One warning sign was found, so the case should be reviewed before approval."
 
     def _reason_description(
         self,
@@ -494,35 +601,20 @@ class JsonEvaluationService:
         available_baselines = [value for value in medians.values() if value]
         baseline = min(available_baselines) if available_baselines else 0.0
         strongest_ratio = max(ratios["category"], ratios["state_category"], ratios["constituency_category"])
-
-        parts = [
-            "Signals: " + "; ".join(model_reasons) + ".",
-            (
-                f"Financial check: requested amount Rs {amount:,.0f}; closest trained median Rs {baseline:,.0f}; "
-                f"strongest local ratio {strongest_ratio:.2f}x; trigger threshold {COST_OUTLIER_MEDIAN_RATIO_THRESHOLD:.1f}x."
-                if baseline
-                else f"Financial check: requested amount Rs {amount:,.0f}; no matching trained median was available."
-            ),
-            f"IsolationForest check: trained statistical risk score {isolation_forest_risk:.2f}/100.",
-            (
-                "Duplicate check: "
-                f"{counts['same_work_location']} same-work locality+ward records, "
-                f"{counts['same_category_location']} same-work-type locality+ward records, "
-                f"{counts['same_type_location_month']} same-type records in the same month."
-            ),
-            f"Split-sanction check: {counts['split_window']} near-Rs-5L records matched the locality+ward time window.",
-        ]
-
-        if financial_refs:
-            parts.append("Financial references: " + self._format_reference_list(financial_refs) + ".")
-        if duplicate_refs:
-            parts.append("Duplicate references: " + self._format_reference_list(duplicate_refs) + ".")
-        if split_refs:
-            parts.append("Split-sanction references: " + self._format_reference_list(split_refs) + ".")
-        return " ".join(parts)
+        reason = self._short_reason_sentence(
+            model_reasons=model_reasons,
+            amount=amount,
+            baseline=baseline,
+            strongest_ratio=strongest_ratio,
+            counts=counts,
+        )
+        if financial_refs or duplicate_refs or split_refs:
+            return f"{reason} Check the compared records and chart below for evidence."
+        return reason
 
     def _format_reference_list(self, references: list[EvaluationReference]) -> str:
-        return "; ".join(
-            f"{ref.project_key} ({ref.work_clean}, Rs {ref.amount:,.0f}, {ref.locality or 'unknown locality'}, ward {ref.ward or 'unknown'})"
-            for ref in references[:5]
+        return "\n".join(
+            f"- Similar record {index}: {ref.work_clean}; Rs {ref.amount:,.0f}; "
+            f"{ref.locality or 'unknown locality'}; ward {ref.ward or 'unknown'}"
+            for index, ref in enumerate(references[:5], start=1)
         )

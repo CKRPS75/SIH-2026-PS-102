@@ -4,12 +4,15 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas.analytics import (
     AnalyticsSummary,
+    DuplicateLocationAnalyticsResponse,
+    DuplicateLocationRow,
     JsonEvaluationResponse,
     PredictionDetail,
     PredictionListResponse,
     ProjectEvaluationInput,
     StateRiskRow,
 )
+from app.services.duplicate_location_analytics_service import DuplicateLocationAnalyticsService
 from app.services.json_evaluation_service import JsonEvaluationService
 from app.services.prediction_analytics_service import PredictionAnalyticsService
 
@@ -17,6 +20,7 @@ from app.services.prediction_analytics_service import PredictionAnalyticsService
 router = APIRouter(prefix="/api/v1", tags=["analytics"])
 analytics_service = PredictionAnalyticsService()
 json_evaluation_service = JsonEvaluationService()
+duplicate_location_service = DuplicateLocationAnalyticsService()
 
 
 def _data_not_ready_error(error: FileNotFoundError) -> HTTPException:
@@ -44,6 +48,31 @@ def state_risk(limit: int = Query(default=20, ge=1, le=100)) -> list[StateRiskRo
         return analytics_service.state_risk(limit=limit)
     except FileNotFoundError as error:
         raise _data_not_ready_error(error) from None
+
+
+@router.get("/analytics/duplicates/locations", response_model=DuplicateLocationAnalyticsResponse)
+def duplicate_locations(
+    limit: int = Query(default=20, ge=1, le=100),
+    include_low_confidence: bool = Query(default=False),
+) -> DuplicateLocationAnalyticsResponse:
+    try:
+        return duplicate_location_service.ranked_locations(
+            limit=limit,
+            include_low_confidence=include_low_confidence,
+        )
+    except FileNotFoundError as error:
+        raise _data_not_ready_error(error) from None
+
+
+@router.get("/analytics/duplicates/locations/{location_key}", response_model=DuplicateLocationRow)
+def duplicate_location_detail(location_key: str) -> DuplicateLocationRow:
+    try:
+        location = duplicate_location_service.location_detail(location_key)
+    except FileNotFoundError as error:
+        raise _data_not_ready_error(error) from None
+    if not location:
+        raise HTTPException(status_code=404, detail={"code": "DUPLICATE_LOCATION_NOT_FOUND"})
+    return location
 
 
 @router.get("/predictions", response_model=PredictionListResponse)

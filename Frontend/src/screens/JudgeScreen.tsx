@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Project } from "../data/projects";
 import { evaluateProposal, type RiskEvaluation } from "../api";
 import { Card } from "../components/common/Card";
+import { sanitizeAuditText } from "../utils/helpers";
 
 // ── Judge Screen ──────────────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
   "allocation_amount_numeric": 100000
 }`);
 
-  const steps = ["Parsing proposal","Checking locality and ward","Comparing trained medians","Finding split-sanction clusters","Generating risk rating"];
+  const steps = ["Reading proposal","Checking locality and ward","Comparing past costs","Finding split proposal groups","Generating risk rating"];
 
   async function handleSubmit() {
     setError(null);
@@ -75,11 +76,22 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
 
   if (state === "result" && result) {
     const evaluation = result.evaluation;
+    const scores = evaluation.component_scores;
     const flagBg = evaluation.flag === "RED" ? "#FFDAD6" : evaluation.flag === "YELLOW" ? "#FFEFD6" : "#D4F8E8";
     const flagText = evaluation.flag === "RED" ? "#B3261E" : evaluation.flag === "YELLOW" ? "#7C4F00" : "#006C4C";
+    const visibleScores: Array<[string, number]> = [
+      ["Duplicate", scores.duplicate ?? 0],
+      ["Financial", scores.financial ?? 0],
+      ["Split Sanction", scores.split_sanction ?? 0],
+    ];
     const references = Object.entries(evaluation.references).flatMap(([group, refs]) =>
       refs.map(ref => ({ ...ref, group }))
     );
+    const groupLabel: Record<string, string> = {
+      financial: "Financial comparison",
+      duplicates: "Duplicate comparison",
+      split_sanctions: "Split sanction comparison",
+    };
     return (
       <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-scale-in" style={{ background: "#F3F0F9" }}>
         <div className="rounded-3xl p-5 space-y-4" style={{ background: flagBg }}>
@@ -103,11 +115,11 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
           <div className="p-4 space-y-3">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#49454F" }}>Comment</div>
-              <div className="text-sm leading-relaxed" style={{ color: "#1C1B1F" }}>{evaluation.comment}</div>
+              <div className="text-sm leading-relaxed" style={{ color: "#1C1B1F" }}>{sanitizeAuditText(evaluation.comment)}</div>
             </div>
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#49454F" }}>Reason/Description</div>
-              <div className="text-xs leading-relaxed" style={{ color: "#49454F" }}>{evaluation.reason_description}</div>
+              <div className="text-xs leading-relaxed whitespace-pre-line" style={{ color: "#49454F" }}>{sanitizeAuditText(evaluation.reason_description)}</div>
             </div>
           </div>
         </Card>
@@ -115,9 +127,9 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
         <Card>
           <div className="p-4 space-y-3">
             <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>Component Scores</div>
-            {Object.entries(evaluation.component_scores).map(([name, score]) => (
+            {visibleScores.map(([name, score]) => (
               <div key={name}>
-                <div className="flex justify-between text-[10px] mb-1 capitalize" style={{ color: "#49454F" }}><span>{name.replace("_", " ")}</span><span>{score.toFixed(1)}</span></div>
+                <div className="flex justify-between text-[10px] mb-1" style={{ color: "#49454F" }}><span>{name}</span><span>{score.toFixed(1)}</span></div>
                 <div className="h-2 rounded-full overflow-hidden" style={{ background: "#ECE6F0" }}>
                   <div className="h-full rounded-full" style={{ width: `${Math.min(score, 100)}%`, background: score >= 65 ? "#B3261E" : score >= 45 ? "#F59E0B" : "#10B981" }} />
                 </div>
@@ -130,10 +142,12 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
           <Card>
             <div className="p-4 space-y-2">
               <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>Compared Records</div>
-              {references.slice(0, 8).map(ref => (
-                <div key={`${ref.group}-${ref.project_key}`} className="rounded-2xl px-3 py-2" style={{ background: "#F3F0F9" }}>
-                  <div className="text-[10px] font-mono" style={{ color: "#79747E" }}>{ref.project_key} · {ref.source_dataset}</div>
-                  <div className="text-xs font-semibold truncate" style={{ color: "#1C1B1F" }}>{ref.work_clean}</div>
+              {references.slice(0, 8).map((ref, index) => (
+                <div key={`${ref.group}-${index}`} className="rounded-2xl px-3 py-2" style={{ background: "#F3F0F9" }}>
+                  <div className="text-[10px] font-semibold" style={{ color: "#79747E" }}>
+                    Compared record {index + 1} · {groupLabel[ref.group] ?? "Reference comparison"}
+                  </div>
+                  <div className="text-xs font-semibold truncate" style={{ color: "#1C1B1F" }}>{sanitizeAuditText(ref.work_clean)}</div>
                   <div className="text-[10px]" style={{ color: "#49454F" }}>{ref.locality || "Unknown locality"} · Ward {ref.ward || "Unknown"} · Rs {(ref.amount / 100000).toFixed(1)}L</div>
                 </div>
               ))}
