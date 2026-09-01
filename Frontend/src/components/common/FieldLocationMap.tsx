@@ -273,6 +273,15 @@ export function FieldLocationMap({ project }: FieldLocationMapProps) {
     return "#006C4C";
   }, [project]);
 
+  const googleMapsUrl = useMemo(() => {
+    if (!project) return "#";
+    if (coords) {
+      return `https://www.google.com/maps/search/?api=1&query=${coords[0]},${coords[1]}`;
+    }
+    const query = project.location || project.district || project.constituency || "";
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  }, [coords, project]);
+
   if (!project) {
     return null;
   }
@@ -281,7 +290,7 @@ export function FieldLocationMap({ project }: FieldLocationMapProps) {
   if (!loading && (error || !coords)) {
     return (
       <div
-        className="rounded-3xl p-4 text-center space-y-1"
+        className="rounded-3xl p-4 text-center space-y-2"
         style={{
           background: "#ECE6F0",
           border: "1px solid #CAC4D0",
@@ -293,6 +302,20 @@ export function FieldLocationMap({ project }: FieldLocationMapProps) {
         <div className="text-[10px]" style={{ color: "#79747E" }}>
           {project.location || "No location data available"}
         </div>
+        {project.location && (
+          <a
+            href={googleMapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-sm"
+            style={{ background: "#4F46E5", textDecoration: "none" }}
+          >
+            <span>Search on Google Maps</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z" />
+            </svg>
+          </a>
+        )}
       </div>
     );
   }
@@ -306,8 +329,33 @@ export function FieldLocationMap({ project }: FieldLocationMapProps) {
         border: "1px solid #ECE6F0",
       }}
     >
+      {/* Floating Google Maps Action Button */}
+      <a
+        href={googleMapsUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="absolute top-2.5 right-2.5 z-[1000] flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold text-white shadow-md transition-all active:scale-95 hover:opacity-95"
+        style={{
+          background: "#4F46E5",
+          textDecoration: "none",
+          backdropFilter: "blur(4px)",
+        }}
+        title="Open project location in Google Maps"
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+        </svg>
+        <span>Open in Google Maps</span>
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z" />
+        </svg>
+      </a>
+
       {loading && (
-        <div className="absolute inset-0 z-[1000] flex items-center justify-center text-xs font-medium" style={{ background: "rgba(243, 240, 249, 0.8)", color: "#49454F" }}>
+        <div
+          className="absolute inset-0 z-[1000] flex items-center justify-center text-xs font-medium"
+          style={{ background: "rgba(243, 240, 249, 0.8)", color: "#49454F" }}
+        >
           Resolving project location...
         </div>
       )}
@@ -328,7 +376,7 @@ export function FieldLocationMap({ project }: FieldLocationMapProps) {
           <MapController center={coords} />
           <Marker position={coords} icon={createMarkerIcon(markerColor)}>
             <Popup>
-              <div style={{ padding: "2px", minWidth: "150px", maxWidth: "200px" }}>
+              <div style={{ padding: "3px", minWidth: "160px", maxWidth: "210px" }}>
                 <div style={{ fontSize: "9px", fontFamily: "monospace", color: "#79747E", marginBottom: "2px" }}>
                   {project.id}
                 </div>
@@ -338,7 +386,7 @@ export function FieldLocationMap({ project }: FieldLocationMapProps) {
                 <div style={{ fontSize: "10px", color: "#49454F", marginBottom: "4px" }}>
                   📍 {project.location}
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #ECE6F0", paddingTop: "3px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #ECE6F0", paddingTop: "3px", marginBottom: "6px" }}>
                   <span style={{ fontSize: "10px", fontWeight: "600", color: "#1C1B1F" }}>{project.amount}</span>
                   <span
                     style={{
@@ -353,6 +401,33 @@ export function FieldLocationMap({ project }: FieldLocationMapProps) {
                     {project.status}
                   </span>
                 </div>
+
+                {/* Google Maps Button inside Popup */}
+                <a
+                  href={googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "4px",
+                    width: "100%",
+                    padding: "5px 8px",
+                    background: "#4F46E5",
+                    color: "#FFFFFF",
+                    fontSize: "10px",
+                    fontWeight: "bold",
+                    borderRadius: "6px",
+                    textDecoration: "none",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <span>Open in Google Maps</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z" />
+                  </svg>
+                </a>
               </div>
             </Popup>
           </Marker>
