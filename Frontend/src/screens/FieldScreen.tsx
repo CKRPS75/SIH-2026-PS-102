@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Card } from "../components/common/Card";
 import { FieldLocationMap } from "../components/common/FieldLocationMap";
+import { CameraModule } from "../components/common/CameraModule";
 import type { Project } from "../data/projects";
 
 // ── Field Screen ──────────────────────────────────────────────────────────────
@@ -11,6 +12,7 @@ function FieldScreen({ assignments }: { assignments: Project[] }) {
   const [state, setState] = useState<FieldState>("project");
   const [exifStep, setExifStep] = useState(0);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(assignments[0]?.id ?? null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
   const selectedProject = useMemo(() => {
     return assignments.find((project) => project.id === selectedProjectId) ?? assignments[0] ?? null;
@@ -21,6 +23,7 @@ function FieldScreen({ assignments }: { assignments: Project[] }) {
   function handleBeginVerification(project: Project) {
     setSelectedProjectId(project.id);
     setExifStep(0);
+    setCapturedImage(null);
     setState("camera");
   }
 
@@ -39,6 +42,7 @@ function FieldScreen({ assignments }: { assignments: Project[] }) {
 
   function resetToQueue() {
     setExifStep(0);
+    setCapturedImage(null);
     setState("project");
   }
 
@@ -159,25 +163,14 @@ function FieldScreen({ assignments }: { assignments: Project[] }) {
             </div>
           </Card>
           <FieldLocationMap project={selectedProject} />
-          <div className="rounded-3xl overflow-hidden" style={{ background: "#1C1B1F", height: 280 }}>
-            <div className="h-full flex flex-col items-center justify-center gap-4">
-              <div className="w-24 h-24 rounded-full flex items-center justify-center" style={{ border: "2px dashed #49454F" }}>
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="#49454F">
-                  <path d="M12 15.2a3.2 3.2 0 100-6.4 3.2 3.2 0 000 6.4z" />
-                  <path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z" />
-                </svg>
-              </div>
-              <div className="text-sm font-semibold" style={{ color: "#FFFBFE" }}>
-                Capture Site Evidence
-              </div>
-              <div className="text-xs" style={{ color: "#79747E" }}>
-                Point camera at the approved project site
-              </div>
-            </div>
-          </div>
-          <button onClick={() => setState("captured")} className="w-full h-14 rounded-3xl text-sm font-semibold text-white md-ripple" style={{ background: "#4F46E5" }}>
-            Take Photo
-          </button>
+          <CameraModule
+            project={selectedProject}
+            onCapture={(photoUrl) => {
+              setCapturedImage(photoUrl);
+              setState("captured");
+            }}
+            onCancel={resetToQueue}
+          />
         </div>
       )}
 
@@ -193,22 +186,51 @@ function FieldScreen({ assignments }: { assignments: Project[] }) {
               </div>
             </div>
           </Card>
-          <div className="rounded-3xl overflow-hidden" style={{ background: "#1C1B1F", height: 240 }}>
-            <div className="h-full flex flex-col items-center justify-center gap-3">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl" style={{ background: "#006C4C", color: "#FFFFFF" }}>
-                ✓
+          <div className="rounded-3xl overflow-hidden relative border border-emerald-500/30 shadow-lg" style={{ background: "#1C1B1F" }}>
+            {capturedImage ? (
+              <div className="relative">
+                <img src={capturedImage} alt="Captured Field Evidence" className="w-full h-64 object-cover" />
+                <div className="absolute top-3 left-3 bg-emerald-600/90 text-white font-bold text-[10px] px-3 py-1 rounded-full backdrop-blur-md flex items-center gap-1.5 shadow">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  EVIDENCE CAPTURED & GEOTAGGED
+                </div>
               </div>
-              <div className="text-sm font-semibold" style={{ color: "#10B981" }}>
-                Photo Captured
+            ) : (
+              <div className="h-60 flex flex-col items-center justify-center gap-3">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl" style={{ background: "#006C4C", color: "#FFFFFF" }}>
+                  ✓
+                </div>
+                <div className="text-sm font-semibold" style={{ color: "#10B981" }}>
+                  Photo Captured
+                </div>
+                <div className="text-xs" style={{ color: "#79747E" }}>
+                  Field evidence ready for metadata extraction
+                </div>
               </div>
-              <div className="text-xs" style={{ color: "#79747E" }}>
-                Field evidence ready for metadata extraction
-              </div>
-            </div>
+            )}
           </div>
-          <button onClick={handleExtract} className="w-full h-14 rounded-3xl text-sm font-semibold text-white md-ripple" style={{ background: "#4F46E5" }}>
-            Extract EXIF Metadata
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setCapturedImage(null);
+                setState("camera");
+              }}
+              className="flex-1 h-12 rounded-2xl text-xs font-semibold md-ripple flex items-center justify-center gap-1.5 border border-slate-300"
+              style={{ background: "#FFFFFF", color: "#49454F" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8z" />
+              </svg>
+              Retake Photo
+            </button>
+            <button
+              onClick={handleExtract}
+              className="flex-[2] h-12 rounded-2xl text-xs font-semibold text-white md-ripple shadow-md"
+              style={{ background: "#4F46E5" }}
+            >
+              Extract EXIF Metadata
+            </button>
+          </div>
         </div>
       )}
 
