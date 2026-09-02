@@ -1,15 +1,21 @@
 import { useEffect, useState } from "react";
 import type { Tab, Project } from "./data/projects";
 import { getProjects } from "./api";
+import { isSignedIn, signOut } from "./data/auth";
 import { StatusBar } from "./components/common/StatusBar";
 import { NavBar } from "./components/common/NavBar";
 import { HomeScreen } from "./screens/HomeScreen";
 import { AuditsScreen } from "./screens/AuditsScreen";
 import { JudgeScreen } from "./screens/JudgeScreen";
 import { FieldScreen } from "./screens/FieldScreen";
+import { SignInScreen } from "./screens/SignInScreen";
+import { ProfileScreen } from "./screens/ProfileScreen";
+import { PreferencesScreen } from "./screens/PreferencesScreen";
+import { AuditLogsScreen } from "./screens/AuditLogsScreen";
 import { RiskAuditSheet } from "./components/sheets/RiskAuditSheet";
 import { NotifSheet } from "./components/sheets/NotifSheet";
 import { ProfileSheet } from "./components/sheets/ProfileSheet";
+import type { ProfileNav } from "./components/sheets/ProfileSheet";
 import { BottomNav } from "./components/navigation/BottomNav";
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -26,6 +32,7 @@ function loadFieldAssignments(): Project[] {
 }
 
 export default function App() {
+  const [signedIn, setSignedIn] = useState(() => isSignedIn());
   const [tab, setTab] = useState<Tab>("home");
   const [projects, setProjects] = useState<Project[]>([]);
   const [fieldAssignments, setFieldAssignments] = useState<Project[]>(loadFieldAssignments);
@@ -34,6 +41,7 @@ export default function App() {
   const [auditProject, setAuditProject] = useState<Project | null>(null);
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [profileNav, setProfileNav] = useState<ProfileNav>(null);
 
   useEffect(() => {
     getProjects()
@@ -53,6 +61,74 @@ export default function App() {
     });
     setTab("field");
   }
+
+  function handleSignOut() {
+    signOut();
+    setSignedIn(false);
+    setProfileNav(null);
+    setShowProfile(false);
+    setAuditProject(null);
+  }
+
+  function handleSignedIn() {
+    setSignedIn(true);
+    setTab("home");
+  }
+
+  // ── Phone frame content
+  const renderContent = () => {
+    // Not signed in → show SignIn screen (no nav)
+    if (!signedIn) {
+      return (
+        <div className="flex-1 flex flex-col overflow-hidden relative" style={{ background: "#F3F0F9" }}>
+          <SignInScreen onSignedIn={handleSignedIn} />
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden relative" style={{ background: "#F3F0F9" }}>
+        {/* Top App Bar actions — overlaid */}
+        <div className="absolute top-0 right-3 z-20 flex items-center gap-1 py-2">
+          <button onClick={() => { setShowNotif(true); setShowProfile(false); }} className="w-9 h-9 rounded-full flex items-center justify-center state-hover-onsurf relative">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#49454F"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: "#B3261E", border: "1.5px solid #F3F0F9" }} />
+          </button>
+          <button onClick={() => { setShowProfile(true); setShowNotif(false); }} className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs text-white" style={{ background: "#4F46E5" }}>GO</button>
+        </div>
+
+        {/* Main screens */}
+        {loading && <div className="flex-1 flex items-center justify-center text-sm">Loading live predictions...</div>}
+        {!loading && error && <div className="flex-1 flex items-center justify-center p-6 text-center text-sm">{error}</div>}
+        {!loading && !error && tab === "home" && <HomeScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
+        {!loading && !error && tab === "audits" && <AuditsScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
+        {!loading && !error && tab === "judge" && <JudgeScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
+        {tab === "field" && <FieldScreen assignments={fieldAssignments} />}
+
+        {/* Bottom sheets */}
+        {auditProject && (
+          <RiskAuditSheet
+            project={auditProject}
+            onClose={() => setAuditProject(null)}
+            onRequestFieldAudit={handleRequestFieldAudit}
+          />
+        )}
+        {showNotif && <NotifSheet onClose={() => setShowNotif(false)} />}
+        {showProfile && (
+          <ProfileSheet
+            onClose={() => setShowProfile(false)}
+            onNavigate={(nav) => { setProfileNav(nav); }}
+            onSignOut={handleSignOut}
+          />
+        )}
+
+        {/* Profile sub-screens — full overlay */}
+        {profileNav === "profile" && <ProfileScreen onClose={() => setProfileNav(null)} />}
+        {profileNav === "preferences" && <PreferencesScreen onClose={() => setProfileNav(null)} />}
+        {profileNav === "auditlogs" && <AuditLogsScreen onClose={() => setProfileNav(null)} />}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-full flex items-center justify-center p-4" style={{ background: "#1a1a2e" }}>
@@ -75,37 +151,10 @@ export default function App() {
         <StatusBar />
 
         {/* Screen content */}
-        <div className="flex-1 flex flex-col overflow-hidden relative" style={{ background: "#F3F0F9" }}>
-          {/* Top App Bar actions — overlaid */}
-          <div className="absolute top-0 right-3 z-20 flex items-center gap-1 py-2">
-            <button onClick={() => { setShowNotif(true); setShowProfile(false); }} className="w-9 h-9 rounded-full flex items-center justify-center state-hover-onsurf relative">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="#49454F"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: "#B3261E", border: "1.5px solid #F3F0F9" }} />
-            </button>
-            <button onClick={() => { setShowProfile(true); setShowNotif(false); }} className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs text-white" style={{ background: "#4F46E5" }}>GO</button>
-          </div>
+        {renderContent()}
 
-          {loading && <div className="flex-1 flex items-center justify-center text-sm">Loading live predictions...</div>}
-          {!loading && error && <div className="flex-1 flex items-center justify-center p-6 text-center text-sm">{error}</div>}
-          {!loading && !error && tab === "home" && <HomeScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
-          {!loading && !error && tab === "audits" && <AuditsScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
-          {!loading && !error && tab === "judge" && <JudgeScreen projects={projects} onOpenAudit={p => setAuditProject(p)} />}
-          {tab === "field" && <FieldScreen assignments={fieldAssignments} />}
-
-          {/* Bottom sheets */}
-          {auditProject && (
-            <RiskAuditSheet
-              project={auditProject}
-              onClose={() => setAuditProject(null)}
-              onRequestFieldAudit={handleRequestFieldAudit}
-            />
-          )}
-          {showNotif && <NotifSheet onClose={() => setShowNotif(false)} />}
-          {showProfile && <ProfileSheet onClose={() => setShowProfile(false)} />}
-        </div>
-
-        {/* Bottom Navigation */}
-        <BottomNav tab={tab} setTab={setTab} />
+        {/* Bottom Navigation — only when signed in and not in a sub-screen */}
+        {signedIn && !profileNav && <BottomNav tab={tab} setTab={setTab} />}
 
         {/* Android nav bar */}
         <NavBar />

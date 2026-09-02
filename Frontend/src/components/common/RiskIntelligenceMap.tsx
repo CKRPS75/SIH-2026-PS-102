@@ -16,7 +16,7 @@ const MUMBAI_HOTSPOTS: Array<[number, number]> = [
   [19.086, 72.909], // Ghatkopar
   [19.0178, 72.8478], // Dadar
   [19.0166, 72.8154], // Worli
-  [19.1726, 72.8500], // Goregaon
+  [19.1726, 72.85], // Goregaon
   [19.2307, 72.8567], // Borivali
 ];
 
@@ -79,11 +79,12 @@ export function RiskIntelligenceMap({ projects, onOpenAudit }: RiskIntelligenceM
         {displayProjects.map((p, index) => {
           const coords = MUMBAI_HOTSPOTS[index % MUMBAI_HOTSPOTS.length];
           const pinColor = riskColor(p.risk).dot;
+          const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${coords[0]},${coords[1]}`;
 
           return (
             <Marker key={p.id} position={coords} icon={createPinIcon(pinColor)}>
               <Popup>
-                <div style={{ padding: "3px", minWidth: "150px", maxWidth: "200px" }}>
+                <div style={{ padding: "3px", minWidth: "160px", maxWidth: "210px" }}>
                   <div style={{ fontSize: "9px", fontFamily: "monospace", color: "#79747E", marginBottom: "2px" }}>
                     {p.id}
                   </div>
@@ -97,7 +98,7 @@ export function RiskIntelligenceMap({ projects, onOpenAudit }: RiskIntelligenceM
                     onClick={() => onOpenAudit(p)}
                     style={{
                       width: "100%",
-                      padding: "4px 8px",
+                      padding: "5px 8px",
                       background: "#4F46E5",
                       color: "#FFFFFF",
                       fontSize: "10px",
@@ -105,11 +106,36 @@ export function RiskIntelligenceMap({ projects, onOpenAudit }: RiskIntelligenceM
                       borderRadius: "6px",
                       border: "none",
                       cursor: "pointer",
-                      marginTop: "2px",
+                      marginBottom: "4px",
                     }}
                   >
                     Inspect Audit Case
                   </button>
+                  <a
+                    href={googleMapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "4px",
+                      width: "100%",
+                      padding: "4px 8px",
+                      background: "#ECE6F0",
+                      color: "#1C1B1F",
+                      fontSize: "9px",
+                      fontWeight: "600",
+                      borderRadius: "6px",
+                      textDecoration: "none",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <span>Open in Google Maps</span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z" />
+                    </svg>
+                  </a>
                 </div>
               </Popup>
             </Marker>
@@ -140,4 +166,3 @@ export function RiskIntelligenceMap({ projects, onOpenAudit }: RiskIntelligenceM
 }
 
 export default RiskIntelligenceMap;
-
