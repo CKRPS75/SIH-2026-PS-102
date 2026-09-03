@@ -33,6 +33,53 @@ class StateRiskRow(BaseModel):
     pending_count: int
 
 
+class ConstituencyAnomalyRateRow(BaseModel):
+    state: str
+    constituency: str
+    total_case_count: int
+    anomalous_case_count: int
+    anomaly_rate: float
+    green_count: int
+    yellow_count: int
+    red_count: int
+    duplicate_count: int
+    financial_anomaly_count: int
+    split_sanction_count: int
+    pending_count: int
+    total_allocation_amount: float
+    mean_model_risk_score: float
+
+
+class ConstituencyAnomalyRateResponse(BaseModel):
+    dataset: str
+    total_constituencies: int
+    min_projects: int
+    rows: list[ConstituencyAnomalyRateRow]
+
+
+class StateAnomalyRateRow(BaseModel):
+    state: str
+    total_case_count: int
+    anomalous_case_count: int
+    anomaly_rate: float
+    green_count: int
+    yellow_count: int
+    red_count: int
+    duplicate_count: int
+    financial_anomaly_count: int
+    split_sanction_count: int
+    pending_count: int
+    total_allocation_amount: float
+    mean_model_risk_score: float
+
+
+class StateAnomalyRateResponse(BaseModel):
+    dataset: str
+    total_states: int
+    min_projects: int
+    rows: list[StateAnomalyRateRow]
+
+
 class DuplicateProjectPair(BaseModel):
     pair_label: str
     first_work: str

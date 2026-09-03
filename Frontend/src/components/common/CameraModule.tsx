@@ -1,30 +1,54 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { Project } from "../../data/projects";
+import { formatCoordinates, type Coordinates } from "../../utils/geotag";
+
+export type FieldCaptureMetadata = {
+  capturedAt: string;
+  photoCoords: Coordinates | null;
+  accuracyMeters: number | null;
+  coordsText: string;
+};
 
 interface CameraModuleProps {
   project: Project;
-  onCapture: (photoUrl: string) => void;
+  onCapture: (photoUrl: string, metadata: FieldCaptureMetadata) => void;
   onCancel?: () => void;
 }
 
 export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [torchOn, setTorchOn] = useState<boolean>(false);
   const [torchSupported, setTorchSupported] = useState<boolean>(false);
   const [gridOn, setGridOn] = useState<boolean>(true);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [flashEffect, setFlashEffect] = useState<boolean>(false);
   const [retryKey, setRetryKey] = useState<number>(0);
 
   // Live telemetry HUD state
-  const [coords, setCoords] = useState<string>(project.coords || "12.9716° N, 77.5946° E");
-  const [accuracy, setAccuracy] = useState<string>("± 3.2m");
+  const [coords, setCoords] = useState<string>("GPS waiting for permission");
+  const [photoCoords, setPhotoCoords] = useState<Coordinates | null>(null);
+  const [accuracyMeters, setAccuracyMeters] = useState<number | null>(null);
+  const [accuracy, setAccuracy] = useState<string>("Accuracy unavailable");
   const [timestamp, setTimestamp] = useState<string>("");
+
+  function stopCamera(keepLoading = false) {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setStream(null);
+    setTorchOn(false);
+    setTorchSupported(false);
+    setLoading(keepLoading);
+    if (!keepLoading) {
+      setCameraError(null);
+    }
+  }
 
   // Update HUD timestamp continuously
   useEffect(() => {
@@ -39,39 +63,45 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
 
   // Try real browser Geolocation for HUD if available
   useEffect(() => {
-    if ("geolocation" in navigator) {
+    if (cameraActive && "geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          const lat = pos.coords.latitude.toFixed(5);
-          const lng = pos.coords.longitude.toFixed(5);
-          const latDir = pos.coords.latitude >= 0 ? "N" : "S";
-          const lngDir = pos.coords.longitude >= 0 ? "E" : "W";
-          setCoords(`${Math.abs(Number(lat))}° ${latDir}, ${Math.abs(Number(lng))}° ${lngDir}`);
-          if (pos.coords.accuracy) {
-            setAccuracy(`± ${pos.coords.accuracy.toFixed(1)}m`);
-          }
+          const nextCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setPhotoCoords(nextCoords);
+          setCoords(formatCoordinates(nextCoords));
+          setAccuracyMeters(pos.coords.accuracy ?? null);
+          setAccuracy(pos.coords.accuracy ? `+/- ${pos.coords.accuracy.toFixed(1)}m` : "Accuracy unavailable");
         },
         () => {
-          // Fallback to project coords on permission deny or error
+          setPhotoCoords(null);
+          setCoords("GPS permission unavailable");
+          setAccuracy("Accuracy unavailable");
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
       return () => navigator.geolocation.clearWatch(watchId);
     }
-  }, [project.coords]);
+    if (!cameraActive) {
+      setPhotoCoords(null);
+      setCoords("GPS waiting for permission");
+      setAccuracyMeters(null);
+      setAccuracy("Accuracy unavailable");
+    }
+  }, [cameraActive]);
 
   // Start Media Stream
   useEffect(() => {
+    if (!cameraActive) {
+      stopCamera();
+      return;
+    }
+
     let active = true;
     setLoading(true);
     setCameraError(null);
 
     async function initCamera() {
-      // Stop previous stream tracks
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-        setStream(null);
-      }
+      stopCamera(true);
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         if (active) {
@@ -106,6 +136,7 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
           return;
         }
 
+        streamRef.current = mediaStream;
         setStream(mediaStream);
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
@@ -141,11 +172,9 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
 
     return () => {
       active = false;
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+      stopCamera();
     };
-  }, [facingMode, retryKey]);
+  }, [cameraActive, facingMode, retryKey]);
 
   // Handle Torch toggle
   const toggleTorch = async () => {
@@ -189,6 +218,8 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
 
   // Capture current video frame onto canvas
   const handleCapture = () => {
+    if (!cameraActive) return;
+
     playShutterSound();
     setFlashEffect(true);
     setTimeout(() => setFlashEffect(false), 200);
@@ -250,7 +281,13 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
       ctx.fillText(`GPS: ${coords} (${accuracy})  |  TIME: ${timestamp}`, padding + 16, height - boxHeight - padding + 88);
 
       const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
-      onCapture(dataUrl);
+      stopCamera();
+      onCapture(dataUrl, {
+        capturedAt: new Date().toISOString(),
+        photoCoords,
+        accuracyMeters,
+        coordsText: coords,
+      });
     }
   };
 
@@ -265,7 +302,28 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
 
       {/* Video Viewport / Error State */}
       <div className="absolute inset-0 z-0 overflow-hidden bg-black flex items-center justify-center">
-        {!cameraError ? (
+        {!cameraActive ? (
+          <div className="p-6 text-center text-white space-y-4 z-10 max-w-xs">
+            <div className="w-14 h-14 rounded-full bg-indigo-500/20 text-indigo-300 mx-auto flex items-center justify-center">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 2 7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-1.8c1.77 0 3.2-1.43 3.2-3.2S13.77 8.8 12 8.8 8.8 10.23 8.8 12s1.43 3.2 3.2 3.2z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm font-bold">Camera Closed</div>
+              <div className="text-xs text-slate-300 mt-1 leading-relaxed">
+                Start the camera at the site to capture photo evidence and GPS metadata.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCameraActive(true)}
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full text-xs font-semibold shadow-lg transition-transform active:scale-95"
+            >
+              Start Camera
+            </button>
+          </div>
+        ) : !cameraError ? (
           <video
             ref={videoRef}
             autoPlay
@@ -295,7 +353,7 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
         )}
 
         {/* Loading Overlay */}
-        {loading && !cameraError && (
+        {cameraActive && loading && !cameraError && (
           <div className="absolute inset-0 bg-slate-950/80 z-10 flex flex-col items-center justify-center text-white gap-2">
             <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
             <span className="text-xs font-mono text-slate-300">Initializing AI Camera...</span>
@@ -303,7 +361,7 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
         )}
 
         {/* Rule-of-Thirds Grid Overlay */}
-        {gridOn && !cameraError && (
+        {cameraActive && gridOn && !cameraError && (
           <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 z-10 opacity-30">
             <div className="border-r border-b border-white/60" />
             <div className="border-r border-b border-white/60" />
@@ -318,7 +376,7 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
         )}
 
         {/* AI Geotag Target Scanner Reticle */}
-        {!cameraError && !loading && (
+        {cameraActive && !cameraError && !loading && (
           <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
             <div className="w-48 h-48 border-2 border-indigo-500/50 rounded-2xl relative flex items-center justify-center animate-pulse">
               {/* Corner brackets */}
@@ -335,15 +393,30 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
       {/* Top Controls Overlay */}
       <div className="relative z-20 p-3 flex items-center justify-between bg-gradient-to-b from-black/80 via-black/40 to-transparent">
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-          <span className="text-[10px] font-mono font-bold tracking-wider text-emerald-400 bg-slate-900/80 px-2 py-0.5 rounded-full border border-emerald-500/30">
-            AI GEOTAG LIVE
+          <span className={`w-2.5 h-2.5 rounded-full ${cameraActive ? "bg-emerald-500 animate-ping" : "bg-slate-500"}`} />
+          <span
+            className={`text-[10px] font-mono font-bold tracking-wider bg-slate-900/80 px-2 py-0.5 rounded-full border ${
+              cameraActive ? "text-emerald-400 border-emerald-500/30" : "text-slate-300 border-slate-600"
+            }`}
+          >
+            {cameraActive ? "AI GEOTAG LIVE" : "CAMERA OFF"}
           </span>
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => (cameraActive ? stopCamera() : setCameraActive(true))}
+            className={`h-8 px-3 rounded-full text-[10px] font-bold backdrop-blur-md transition-colors ${
+              cameraActive ? "bg-red-500/90 text-white hover:bg-red-600" : "bg-indigo-600 text-white hover:bg-indigo-700"
+            }`}
+            title={cameraActive ? "Close Camera" : "Start Camera"}
+          >
+            {cameraActive ? "Close Camera" : "Start Camera"}
+          </button>
+
           {/* Torch toggle */}
-          {torchSupported && (
+          {cameraActive && torchSupported && (
             <button
               type="button"
               onClick={toggleTorch}
@@ -362,8 +435,9 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
           <button
             type="button"
             onClick={() => setGridOn(!gridOn)}
+            disabled={!cameraActive}
             className={`w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md transition-colors ${
-              gridOn ? "bg-indigo-600 text-white" : "bg-black/40 text-slate-300 hover:bg-black/60"
+              !cameraActive ? "bg-black/20 text-slate-500" : gridOn ? "bg-indigo-600 text-white" : "bg-black/40 text-slate-300 hover:bg-black/60"
             }`}
             title="Toggle Rule-of-Thirds Grid"
           >
@@ -376,7 +450,10 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
           <button
             type="button"
             onClick={() => setFacingMode((prev) => (prev === "environment" ? "user" : "environment"))}
-            className="w-8 h-8 rounded-full bg-black/40 text-white backdrop-blur-md hover:bg-black/60 flex items-center justify-center transition-transform active:rotate-180"
+            disabled={!cameraActive}
+            className={`w-8 h-8 rounded-full backdrop-blur-md flex items-center justify-center transition-transform active:rotate-180 ${
+              cameraActive ? "bg-black/40 text-white hover:bg-black/60" : "bg-black/20 text-slate-500"
+            }`}
             title="Flip Camera"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -397,8 +474,14 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
               TIMESTAMP: {timestamp}
             </div>
           </div>
-          <div className="text-[9px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-1 rounded-md shrink-0">
-            SITE MATCH OK
+          <div
+            className={`text-[9px] font-semibold px-2 py-1 rounded-md shrink-0 border ${
+              photoCoords
+                ? "text-emerald-400 bg-emerald-950/60 border-emerald-500/30"
+                : "text-amber-300 bg-amber-950/50 border-amber-400/30"
+            }`}
+          >
+            {photoCoords ? "GPS LOCKED" : "GPS PENDING"}
           </div>
         </div>
 
@@ -408,7 +491,10 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
           <button
             type="button"
             onClick={() => setFacingMode((prev) => (prev === "environment" ? "user" : "environment"))}
-            className="w-11 h-11 rounded-full bg-slate-900/80 text-slate-300 border border-slate-700 flex items-center justify-center backdrop-blur-md active:scale-95 transition-all hover:text-white"
+            disabled={!cameraActive}
+            className={`w-11 h-11 rounded-full border border-slate-700 flex items-center justify-center backdrop-blur-md active:scale-95 transition-all ${
+              cameraActive ? "bg-slate-900/80 text-slate-300 hover:text-white" : "bg-slate-900/50 text-slate-600"
+            }`}
             title="Flip Camera"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -420,10 +506,17 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
           <button
             type="button"
             onClick={handleCapture}
-            className="w-16 h-16 rounded-full border-4 border-white/90 p-1 flex items-center justify-center shadow-xl active:scale-90 transition-transform group"
+            disabled={!cameraActive || loading || !!cameraError}
+            className={`w-16 h-16 rounded-full border-4 p-1 flex items-center justify-center shadow-xl active:scale-90 transition-transform group ${
+              cameraActive && !loading && !cameraError ? "border-white/90" : "border-slate-500/70 opacity-60"
+            }`}
             title="Take Photo"
           >
-            <div className="w-full h-full rounded-full bg-indigo-600 group-hover:bg-indigo-500 transition-colors shadow-inner flex items-center justify-center">
+            <div
+              className={`w-full h-full rounded-full transition-colors shadow-inner flex items-center justify-center ${
+                cameraActive && !loading && !cameraError ? "bg-indigo-600 group-hover:bg-indigo-500" : "bg-slate-600"
+              }`}
+            >
               <div className="w-4 h-4 rounded-full bg-white opacity-80" />
             </div>
           </button>
@@ -432,8 +525,9 @@ export function CameraModule({ project, onCapture, onCancel }: CameraModuleProps
           <button
             type="button"
             onClick={() => setGridOn((g) => !g)}
+            disabled={!cameraActive}
             className={`w-11 h-11 rounded-full border border-slate-700 flex items-center justify-center backdrop-blur-md active:scale-95 transition-all ${
-              gridOn ? "bg-indigo-900/60 text-indigo-300 border-indigo-500/40" : "bg-slate-900/80 text-slate-400"
+              !cameraActive ? "bg-slate-900/50 text-slate-600" : gridOn ? "bg-indigo-900/60 text-indigo-300 border-indigo-500/40" : "bg-slate-900/80 text-slate-400"
             }`}
             title="Grid Toggle"
           >

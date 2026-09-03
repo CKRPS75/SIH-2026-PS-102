@@ -101,7 +101,7 @@ class PredictionAnalyticsServiceTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_summary_counts_dashboard_flags(self) -> None:
-        summary = PredictionAnalyticsService(self.predictions_path).summary()
+        summary = PredictionAnalyticsService(self.predictions_path, self.train_predictions_path).summary(dataset="test")
 
         self.assertEqual(summary.total_projects, 3)
         self.assertEqual(summary.risk_level_counts, {"RED": 1, "YELLOW": 1, "GREEN": 1})
@@ -112,6 +112,14 @@ class PredictionAnalyticsServiceTest(unittest.TestCase):
         self.assertEqual(summary.pending_count, 1)
         self.assertEqual(summary.top_states_by_yellow_red, {"Uttar Pradesh": 1, "Gujarat": 1})
 
+    def test_summary_defaults_to_full_mplads_reference_dataset(self) -> None:
+        summary = PredictionAnalyticsService(self.predictions_path, self.train_predictions_path).summary()
+
+        self.assertEqual(summary.total_projects, 5)
+        self.assertEqual(summary.risk_level_counts, {"RED": 2, "YELLOW": 2, "GREEN": 1})
+        self.assertIn(str(self.train_predictions_path), summary.generated_from)
+        self.assertIn(str(self.predictions_path), summary.generated_from)
+
     def test_predictions_support_filters_and_detail_lookup(self) -> None:
         service = PredictionAnalyticsService(self.predictions_path, self.train_predictions_path)
 
@@ -119,7 +127,7 @@ class PredictionAnalyticsServiceTest(unittest.TestCase):
         self.assertEqual(filtered.total, 2)
         self.assertEqual([row.project_key for row in filtered.rows], ["P-001", "P-003"])
 
-        if_only = service.predictions(isolation_forest_only=True)
+        if_only = service.predictions(isolation_forest_only=True, dataset="test")
         self.assertEqual(if_only.total, 1)
         self.assertEqual(if_only.rows[0].project_key, "P-001")
 
@@ -137,6 +145,40 @@ class PredictionAnalyticsServiceTest(unittest.TestCase):
         self.assertEqual(exact.total, 1)
         self.assertEqual(exact.rows[0].project_key, "T-001")
         self.assertEqual(contains.total, 2)
+
+    def test_prediction_detail_defaults_to_train_and_test_rows(self) -> None:
+        service = PredictionAnalyticsService(self.predictions_path, self.train_predictions_path)
+
+        detail = service.prediction_detail("T-001")
+
+        self.assertIsNotNone(detail)
+        self.assertEqual(detail.project_key, "T-001")
+
+    def test_constituency_anomaly_rate_uses_anomalous_over_total_cases(self) -> None:
+        service = PredictionAnalyticsService(self.predictions_path, self.train_predictions_path)
+
+        rates = service.constituency_anomaly_rates(limit=10, min_projects=1)
+        by_key = {(row.state, row.constituency): row for row in rates.rows}
+
+        lucknow = by_key[("Uttar Pradesh", "Lucknow")]
+        kanpur = by_key[("Uttar Pradesh", "Kanpur")]
+        self.assertEqual(lucknow.anomalous_case_count, 2)
+        self.assertEqual(lucknow.total_case_count, 2)
+        self.assertEqual(lucknow.anomaly_rate, 100.0)
+        self.assertEqual(kanpur.anomalous_case_count, 0)
+        self.assertEqual(kanpur.total_case_count, 1)
+        self.assertEqual(kanpur.anomaly_rate, 0.0)
+
+    def test_state_anomaly_rate_uses_anomalous_over_total_projects(self) -> None:
+        service = PredictionAnalyticsService(self.predictions_path, self.train_predictions_path)
+
+        rates = service.state_anomaly_rates(limit=10, min_projects=1)
+        by_state = {row.state: row for row in rates.rows}
+
+        uttar_pradesh = by_state["Uttar Pradesh"]
+        self.assertEqual(uttar_pradesh.anomalous_case_count, 2)
+        self.assertEqual(uttar_pradesh.total_case_count, 3)
+        self.assertEqual(uttar_pradesh.anomaly_rate, 66.67)
 
 
 if __name__ == "__main__":

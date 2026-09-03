@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { Project, Filter } from "../data/projects";
-import { getPredictions, type PredictionRow } from "../api";
+import { getMockLiveAlerts, getPredictions, getStateAnomalyRates, type PredictionRow, type StateAnomalyRateRow } from "../api";
 import { riskColor } from "../utils/helpers";
 import { Chip } from "../components/common/Chip";
 import { Card } from "../components/common/Card";
@@ -31,6 +31,14 @@ type DashboardKpiCard = {
   text: string;
 };
 
+type AlertSection = {
+  key: Project["status"];
+  title: string;
+  caption: string;
+  bg: string;
+  text: string;
+};
+
 const RISK_BUCKETS: RiskBucket[] = [
   { label: "Very Low", min: 0, max: 2, color: "#10B981" },
   { label: "Low", min: 2, max: 4, color: "#22C55E" },
@@ -48,6 +56,12 @@ const ALLOCATION_BUCKETS: AllocationBucket[] = [
   { label: "Rs 25L-50L", min: 2500000, max: 5000000 },
   { label: "Rs 50L-1Cr", min: 5000000, max: 10000000 },
   { label: "> Rs 1Cr", min: 10000000, max: Infinity },
+];
+
+const ALERT_SECTIONS: AlertSection[] = [
+  { key: "HIGH RISK", title: "Red", caption: "High risk mock cases", bg: "#FFDAD6", text: "#B3261E" },
+  { key: "REVIEW", title: "Yellow", caption: "Mock cases needing review", bg: "#FFEFD6", text: "#7C4F00" },
+  { key: "VERIFIED", title: "Green", caption: "Mock cases cleared by logic", bg: "#D4F8E8", text: "#006C4C" },
 ];
 
 function amountToRupees(project: Project): number {
@@ -70,6 +84,10 @@ function projectRiskScore(project: Project): number {
   return project.risk / 10;
 }
 
+function isAnomalousProject(project: Project): boolean {
+  return project.status !== "VERIFIED";
+}
+
 function stateFromLocation(project: Project): string {
   const parts = project.location.split(",");
   return parts[parts.length - 1]?.trim() || "Unknown";
@@ -79,7 +97,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
   const [filter, setFilter] = useState<Filter>("All");
   const [riskBucketFilter, setRiskBucketFilter] = useState<string | null>(null);
   const [allocationBucketFilter, setAllocationBucketFilter] = useState<string | null>(null);
-  const [selectedConstituency, setSelectedConstituency] = useState<string | null>(null);
+  const [selectedState, setSelectedState] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("2 min ago");
   const [dashboardSection, setDashboardSection] = useState<"statistics" | "alerts">("statistics");
@@ -89,6 +107,55 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
   const [mpProjectTotal, setMpProjectTotal] = useState(0);
   const [mpSearchError, setMpSearchError] = useState<string | null>(null);
   const [isMpSearchLoading, setIsMpSearchLoading] = useState(false);
+  const [stateRateRows, setStateRateRows] = useState<StateAnomalyRateRow[]>([]);
+  const [stateRateError, setStateRateError] = useState<string | null>(null);
+  const [mockAlertProjects, setMockAlertProjects] = useState<Project[]>([]);
+  const [mockAlertError, setMockAlertError] = useState<string | null>(null);
+  const [mockAlertsLoading, setMockAlertsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    getStateAnomalyRates(10)
+      .then(response => {
+        if (!cancelled) {
+          setStateRateRows(response.rows);
+          setStateRateError(null);
+        }
+      })
+      .catch(error => {
+        if (!cancelled) {
+          setStateRateRows([]);
+          setStateRateError(error instanceof Error ? error.message : "Could not load state rates");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMockAlertsLoading(true);
+    getMockLiveAlerts()
+      .then(records => {
+        if (!cancelled) {
+          setMockAlertProjects(records);
+          setMockAlertError(null);
+        }
+      })
+      .catch(error => {
+        if (!cancelled) {
+          setMockAlertProjects([]);
+          setMockAlertError(error instanceof Error ? error.message : "Could not load mock live alerts");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setMockAlertsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filters: Filter[] = ["All", "Duplicates", "Overpricing", "Split Sanctions"];
   const riskBucketStats = RISK_BUCKETS.map(bucket => {
@@ -113,9 +180,9 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
       icon: bucket.label.charAt(0),
       bg: bucket.label === "Critical" ? "#FCE8E6" : bucket.label === "High" ? "#FFDAD6" : bucket.label === "Moderate" ? "#FFF8E1" : "#D4F8E8",
       text: bucket.color,
-    }));
+  }));
   const dashboardKpiCards: DashboardKpiCard[] = [
-    { label: "Total Projects", value: `${projects.length}`, caption: "All audit cases", icon: "T", bg: "#E8E7FF", text: "#1A006E" },
+    { label: "Total Projects", value: `${projects.length}`, caption: "Full MPLADS dataset", icon: "T", bg: "#E8E7FF", text: "#1A006E" },
     ...nonZeroRiskCards,
   ];
 
@@ -149,11 +216,10 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
     { label: "Max", value: maxAllocation, emphasize: false },
   ];
 
-  const constituencyStats = Object.values(
+  const stateStats = Object.values(
     projects.reduce<Record<string, {
       key: string;
       state: string;
-      constituency: string;
       totalProjects: number;
       totalAllocation: number;
       anomalousProjects: number;
@@ -166,11 +232,10 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
       projects: Project[];
     }>>((acc, project) => {
       const state = stateFromLocation(project);
-      const key = `${state}|${project.constituency}`;
+      const key = state;
       const current = acc[key] ?? {
         key,
         state,
-        constituency: project.constituency || "Unknown",
         totalProjects: 0,
         totalAllocation: 0,
         anomalousProjects: 0,
@@ -184,7 +249,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
       };
       current.totalProjects += 1;
       current.totalAllocation += amountToRupees(project);
-      current.anomalousProjects += project.anomaly !== "None" && project.status !== "VERIFIED" ? 1 : 0;
+      current.anomalousProjects += isAnomalousProject(project) ? 1 : 0;
       current.duplicateCandidates += project.duplicateScore >= 65 || project.anomaly === "Duplicate" ? 1 : 0;
       current.financialAnomalies += project.financialScore >= 45 || project.anomaly === "Overpricing" ? 1 : 0;
       current.splitSanctionProjects += project.splitSanctionScore >= 60 || project.anomaly === "Split Sanction" ? 1 : 0;
@@ -201,16 +266,40 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
     averageRiskScore: row.totalProjects ? row.riskScoreTotal / row.totalProjects : 0,
     confidence: row.totalProjects >= 10 ? "High" : "Low Sample Confidence",
   }));
-  const rankedConstituencies = constituencyStats
+  const stateStatsByKey = new Map(stateStats.map(row => [row.key, row]));
+  const fallbackStates = stateStats
     .filter(row => row.totalProjects >= 10)
     .sort((a, b) => b.anomalyRate - a.anomalyRate || b.totalProjects - a.totalProjects)
     .slice(0, 10);
-  const displayedConstituencies = rankedConstituencies.length
-    ? rankedConstituencies
-    : constituencyStats.sort((a, b) => b.anomalyRate - a.anomalyRate).slice(0, 10);
-  const maxConstituencyRate = Math.max(...displayedConstituencies.map(row => row.anomalyRate), 1);
-  const selectedConstituencyStats = selectedConstituency
-    ? constituencyStats.find(row => row.key === selectedConstituency) ?? null
+  const displayedStates = stateRateRows.length
+    ? stateRateRows.map(row => {
+      const key = row.state;
+      const localStats = stateStatsByKey.get(key);
+      return {
+        key,
+        state: row.state,
+        totalProjects: row.total_case_count,
+        totalAllocation: row.total_allocation_amount,
+        anomalousProjects: row.anomalous_case_count,
+        duplicateCandidates: row.duplicate_count,
+        financialAnomalies: row.financial_anomaly_count,
+        splitSanctionProjects: row.split_sanction_count,
+        highRiskProjects: localStats?.highRiskProjects ?? 0,
+        criticalRiskProjects: localStats?.criticalRiskProjects ?? 0,
+        riskScoreTotal: localStats?.riskScoreTotal ?? 0,
+        projects: localStats?.projects ?? [],
+        anomalyRate: row.anomaly_rate,
+        averageRiskScore: row.mean_model_risk_score / 10,
+        confidence: row.total_case_count >= 10 ? "High" : "Low Sample Confidence",
+      };
+    })
+    : fallbackStates.length
+    ? fallbackStates
+    : stateStats.sort((a, b) => b.anomalyRate - a.anomalyRate).slice(0, 10);
+  const selectedStateStats = selectedState
+    ? displayedStates.find(row => row.key === selectedState)
+      ?? stateStats.find(row => row.key === selectedState)
+      ?? null
     : null;
 
   const filtered = projects.filter(p => {
@@ -232,7 +321,11 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
     const amount = amountToRupees(project);
     return amount >= bucket.min && amount < bucket.max;
   });
-  const alerts = filtered.filter(p => p.status !== "VERIFIED");
+  const alertCount = mockAlertProjects.length;
+  const alertGroups = ALERT_SECTIONS.map(section => ({
+    ...section,
+    projects: mockAlertProjects.filter(project => project.status === section.key),
+  }));
   const mapPositions = [
     { x: "40%", y: "40%" },
     { x: "43%", y: "44%" },
@@ -322,7 +415,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
             className="h-9 rounded-xl text-xs font-semibold md-ripple"
             style={{ background: dashboardSection === "alerts" ? "#FFFBFE" : "transparent", color: "#1C1B1F" }}
           >
-            Live Alert Feed{alerts.length ? ` (${alerts.length})` : ""}
+            Live Alert Feed{alertCount ? ` (${alertCount})` : ""}
           </button>
         </div>
       </div>
@@ -389,7 +482,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold" style={{ fontFamily: "'Google Sans', sans-serif", color: "#1C1B1F" }}>Overall Project Risk Distribution</div>
-                <div className="text-xs mt-1" style={{ color: "#49454F" }}>Anomaly Risk Score buckets from the AI Audit cases</div>
+                <div className="text-xs mt-1" style={{ color: "#49454F" }}>Anomaly Risk Score buckets from full MPLADS reference records</div>
               </div>
               {riskBucketFilter && (
                 <button onClick={() => setRiskBucketFilter(null)} className="text-[10px] font-semibold px-2 py-1 rounded-full md-ripple" style={{ background: "#ECE6F0", color: "#49454F" }}>Clear</button>
@@ -423,54 +516,57 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
         </Card>
       </div>
 
-      {/* High-risk constituency ranking */}
+      {/* State anomaly ranking */}
       <div className="px-4 mt-4">
         <Card>
           <div className="p-4 space-y-4">
             <div>
-              <div className="text-sm font-semibold" style={{ fontFamily: "'Google Sans', sans-serif", color: "#1C1B1F" }}>Top Constituencies by Anomaly Rate</div>
-              <div className="text-xs mt-1" style={{ color: "#49454F" }}>Ranking uses candidates for review, not confirmed fraud</div>
+              <div className="text-sm font-semibold" style={{ fontFamily: "'Google Sans', sans-serif", color: "#1C1B1F" }}>Top States by Anomaly Rate</div>
+              <div className="text-xs mt-1" style={{ color: "#49454F" }}>Percentage = anomalous MPLADS cases / total MPLADS projects in that state</div>
+              {stateRateError && (
+                <div className="text-[10px] mt-1" style={{ color: "#7C4F00" }}>Using local fallback because backend rate API did not respond.</div>
+              )}
             </div>
             <div className="space-y-2">
-              {displayedConstituencies.map(row => (
+              {displayedStates.map(row => (
                 <button
                   key={row.key}
-                  onClick={() => setSelectedConstituency(selectedConstituency === row.key ? null : row.key)}
-                  title={`${row.constituency}, ${row.state}: ${row.anomalousProjects} anomaly candidates from ${row.totalProjects} projects`}
+                  onClick={() => setSelectedState(selectedState === row.key ? null : row.key)}
+                  title={`${row.state}: ${row.anomalousProjects} anomaly candidates from ${row.totalProjects} MPLADS projects`}
                   className="w-full text-left grid grid-cols-[104px_1fr_52px] items-center gap-2 rounded-2xl p-2 md-ripple"
-                  style={{ background: selectedConstituency === row.key ? "#E8E7FF" : "#FFFFFF" }}
+                  style={{ background: selectedState === row.key ? "#E8E7FF" : "#FFFFFF" }}
                 >
                   <div className="min-w-0">
-                    <div className="text-[10px] font-semibold truncate" style={{ color: "#1C1B1F" }}>{row.constituency}</div>
-                    <div className="text-[9px] truncate" style={{ color: "#79747E" }}>{row.state}</div>
+                    <div className="text-[10px] font-semibold truncate" style={{ color: "#1C1B1F" }}>{row.state}</div>
+                    <div className="text-[9px] truncate" style={{ color: "#79747E" }}>MPLADS state total</div>
                   </div>
                   <div className="h-7 rounded-xl overflow-hidden" style={{ background: "#F3F0F9" }}>
-                    <div className="h-full rounded-xl" style={{ width: `${Math.max(5, (row.anomalyRate / maxConstituencyRate) * 100)}%`, background: row.anomalyRate >= 50 ? "#B3261E" : "#F59E0B" }} />
+                    <div className="h-full rounded-xl" style={{ width: `${Math.max(5, row.anomalyRate)}%`, background: row.anomalyRate >= 50 ? "#B3261E" : "#F59E0B" }} />
                   </div>
                   <div className="text-right">
                     <div className="text-[10px] font-black" style={{ color: row.anomalyRate >= 50 ? "#B3261E" : "#7C4F00" }}>{row.anomalyRate.toFixed(1)}%</div>
-                    <div className="text-[9px]" style={{ color: "#79747E" }}>{row.totalProjects} cases</div>
+                    <div className="text-[9px]" style={{ color: "#79747E" }}>{row.anomalousProjects}/{row.totalProjects}</div>
                   </div>
                 </button>
               ))}
             </div>
-            {selectedConstituencyStats && (
+            {selectedStateStats && (
               <div className="rounded-2xl p-3 space-y-3" style={{ background: "#F3F0F9" }}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-xs font-semibold" style={{ color: "#1C1B1F" }}>{selectedConstituencyStats.constituency}</div>
-                    <div className="text-[10px]" style={{ color: "#49454F" }}>{selectedConstituencyStats.state} · {selectedConstituencyStats.confidence}</div>
+                    <div className="text-xs font-semibold" style={{ color: "#1C1B1F" }}>{selectedStateStats.state}</div>
+                    <div className="text-[10px]" style={{ color: "#49454F" }}>{selectedStateStats.anomalousProjects}/{selectedStateStats.totalProjects} anomalous MPLADS projects · {selectedStateStats.confidence}</div>
                   </div>
                   <div className="text-right">
                     <div className="text-[10px] font-semibold" style={{ color: "#49454F" }}>Average Risk</div>
-                    <div className="text-sm font-black" style={{ color: "#B3261E" }}>{selectedConstituencyStats.averageRiskScore.toFixed(1)}/10</div>
+                    <div className="text-sm font-black" style={{ color: "#B3261E" }}>{selectedStateStats.averageRiskScore.toFixed(1)}/10</div>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    ["Duplicates", selectedConstituencyStats.duplicateCandidates],
-                    ["Financial", selectedConstituencyStats.financialAnomalies],
-                    ["Split", selectedConstituencyStats.splitSanctionProjects],
+                    ["Duplicates", selectedStateStats.duplicateCandidates],
+                    ["Financial", selectedStateStats.financialAnomalies],
+                    ["Split", selectedStateStats.splitSanctionProjects],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-xl p-2" style={{ background: "#FFFFFF" }}>
                       <div className="text-[9px]" style={{ color: "#79747E" }}>{label}</div>
@@ -480,8 +576,8 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
                 </div>
                 <div className="space-y-1">
                   <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>Top Suspicious Projects</div>
-                  {selectedConstituencyStats.projects
-                    .filter(project => project.status !== "VERIFIED")
+                  {selectedStateStats.projects
+                    .filter(isAnomalousProject)
                     .sort((a, b) => b.risk - a.risk)
                     .slice(0, 3)
                     .map(project => (
@@ -567,38 +663,60 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
         {/* Alert Feed */}
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold" style={{ fontFamily: "'Google Sans', sans-serif", color: "#1C1B1F" }}>Live Alert Feed</div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#FFDAD6", color: "#B3261E" }}>{alerts.length} active</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#E8E7FF", color: "#1A006E" }}>Mock data scored live</span>
         </div>
-        <div className="space-y-2">
-          {alerts.length === 0 ? (
-            <Card><div className="p-8 text-center text-sm" style={{ color: "#49454F" }}>✓ No alerts for selected filter</div></Card>
-          ) : alerts.map(p => (
-            <Card key={p.id}>
-              <div className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 text-sm font-black" style={{ background: riskColor(p.risk).bg, color: riskColor(p.risk).dot }}>
-                    {p.risk}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold truncate" style={{ color: "#1C1B1F" }}>{p.title}</span>
-                      <RiskChip status={p.status} />
+        {mockAlertsLoading && <Card><div className="p-8 text-center text-sm" style={{ color: "#49454F" }}>Scoring mock records...</div></Card>}
+        {mockAlertError && <Card><div className="p-4 text-xs" style={{ color: "#B3261E" }}>{mockAlertError}</div></Card>}
+        {!mockAlertsLoading && !mockAlertError && (
+          <div className="max-h-[68vh] overflow-y-auto pr-1 space-y-4">
+            {alertGroups.map(section => (
+              <Card key={section.key}>
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black" style={{ color: section.text }}>{section.title}</div>
+                      <div className="text-[10px]" style={{ color: "#49454F" }}>{section.caption}</div>
                     </div>
-                    <div className="text-[10px] font-mono mt-0.5" style={{ color: "#79747E" }}>{p.id}</div>
-                    <div className="text-xs mt-0.5" style={{ color: "#49454F" }}>{p.amount}</div>
+                    <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ background: section.bg, color: section.text }}>
+                      {section.projects.length}
+                    </span>
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto pr-1 space-y-2">
+                    {section.projects.length === 0 ? (
+                      <div className="rounded-2xl p-4 text-xs text-center" style={{ background: "#F3F0F9", color: "#49454F" }}>
+                        No {section.title.toLowerCase()} mock cases.
+                      </div>
+                    ) : section.projects.map(p => (
+                      <div key={p.id} className="rounded-2xl p-3" style={{ background: "#F3F0F9" }}>
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 text-sm font-black" style={{ background: riskColor(p.risk).bg, color: riskColor(p.risk).dot }}>
+                            {p.risk}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-semibold truncate" style={{ color: "#1C1B1F" }}>{p.title}</span>
+                              <RiskChip status={p.status} />
+                            </div>
+                            <div className="text-[10px] font-mono mt-0.5" style={{ color: "#79747E" }}>{p.id}</div>
+                            <div className="text-xs mt-0.5" style={{ color: "#49454F" }}>{p.amount} · {p.anomaly}</div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => onOpenAudit(p)}
+                          className="mt-3 w-full h-9 rounded-2xl text-xs font-semibold md-ripple transition-colors"
+                          style={{ background: "#E8E7FF", color: "#1A006E" }}
+                        >
+                          Inspect AI Audit
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <button
-                  onClick={() => onOpenAudit(p)}
-                  className="mt-3 w-full h-9 rounded-2xl text-xs font-semibold md-ripple transition-colors"
-                  style={{ background: "#E8E7FF", color: "#1A006E" }}
-                >
-                  Inspect AI Audit
-                </button>
-              </div>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>}
     </div>
   );

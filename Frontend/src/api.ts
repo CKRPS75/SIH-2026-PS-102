@@ -104,6 +104,29 @@ export type DuplicateLocationAnalyticsResponse = {
   rows: DuplicateLocationRow[];
 };
 
+export type StateAnomalyRateRow = {
+  state: string;
+  total_case_count: number;
+  anomalous_case_count: number;
+  anomaly_rate: number;
+  green_count: number;
+  yellow_count: number;
+  red_count: number;
+  duplicate_count: number;
+  financial_anomaly_count: number;
+  split_sanction_count: number;
+  pending_count: number;
+  total_allocation_amount: number;
+  mean_model_risk_score: number;
+};
+
+export type StateAnomalyRateResponse = {
+  dataset: "test" | "train" | "all" | string;
+  total_states: number;
+  min_projects: number;
+  rows: StateAnomalyRateRow[];
+};
+
 function formatAmount(amount: number): string {
   return `₹${(amount / 100000).toFixed(1)}L`;
 }
@@ -167,12 +190,20 @@ function predictionToProject(row: PredictionRow): Project {
     splitSanctionScore: row.model_split_sanction_score ?? 0,
     pendingScore: row.model_pending_score ?? 0,
     reasons,
+    sourceDataset: row.source_dataset || "MPLADS",
   };
 }
 
 export async function getProjects(): Promise<Project[]> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/predictions?limit=20000`);
+  const response = await fetch(`${API_BASE_URL}/api/v1/predictions?dataset=all&limit=70000`);
   if (!response.ok) throw new Error(`Could not load MPLADS predictions (${response.status})`);
+  const data = await response.json() as PredictionListResponse;
+  return data.rows.map(predictionToProject);
+}
+
+export async function getMockLiveAlerts(): Promise<Project[]> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/mock/live-alerts?limit=100`);
+  if (!response.ok) throw new Error(`Could not load mock live alerts (${response.status})`);
   const data = await response.json() as PredictionListResponse;
   return data.rows.map(predictionToProject);
 }
@@ -180,7 +211,7 @@ export async function getProjects(): Promise<Project[]> {
 export async function getPredictions({
   mp,
   limit = 500,
-  dataset = "test",
+  dataset = "all",
   mpMatch = "contains",
 }: {
   mp: string;
@@ -198,6 +229,12 @@ export async function getDuplicateLocations(limit = 10): Promise<DuplicateLocati
   const response = await fetch(`${API_BASE_URL}/api/v1/analytics/duplicates/locations?limit=${limit}`);
   if (!response.ok) throw new Error(`Could not load duplicate-location analytics (${response.status})`);
   return await response.json() as DuplicateLocationAnalyticsResponse;
+}
+
+export async function getStateAnomalyRates(limit = 10): Promise<StateAnomalyRateResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/analytics/states/anomaly-rate?dataset=all&limit=${limit}&min_projects=10`);
+  if (!response.ok) throw new Error(`Could not load state anomaly rates (${response.status})`);
+  return await response.json() as StateAnomalyRateResponse;
 }
 
 export async function getDuplicateLocationDetail(locationKey: string): Promise<DuplicateLocationRow> {

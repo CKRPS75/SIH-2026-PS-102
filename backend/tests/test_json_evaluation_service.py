@@ -84,6 +84,28 @@ class JsonEvaluationServiceTest(unittest.TestCase):
             writer.writeheader()
             writer.writerows(rows)
 
+    def _write_train_predictions(self, rows: list[dict[str, object]]) -> None:
+        fieldnames = [
+            "project_key",
+            "mp_name",
+            "state",
+            "constituency",
+            "ida",
+            "category",
+            "work_clean",
+            "locality",
+            "ward",
+            "block",
+            "recommended_date",
+            "status",
+            "ida_approval",
+            "allocation_amount_numeric",
+        ]
+        with self.train_predictions_path.open("w", encoding="utf-8", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
     def test_json_case_does_not_match_its_own_reference_record(self) -> None:
         proposal = {
             "project_key": "TEST-001",
@@ -201,6 +223,51 @@ class JsonEvaluationServiceTest(unittest.TestCase):
             result.reason_description,
             "A similar local work was found, so officials should review it before approval.",
         )
+
+    def test_repeated_reference_records_are_returned_once(self) -> None:
+        repeated_record = {
+            "mp_name": "Training MP",
+            "state": "Maharashtra",
+            "constituency": "Mumbai North East",
+            "ida": "District Planning Office",
+            "category": "Community Infrastructure",
+            "work_clean": "Construction of roads and approach roads",
+            "locality": "Kurla West",
+            "ward": "12",
+            "block": "Kurla",
+            "recommended_date": "2026-08-01",
+            "status": "Sanctioned",
+            "ida_approval": "Approved",
+            "allocation_amount_numeric": 500000,
+        }
+        self._write_train_predictions(
+            [
+                {**repeated_record, "project_key": "TRAIN-001"},
+                {
+                    **repeated_record,
+                    "project_key": "TRAIN-002",
+                    "locality": "Bandra East",
+                    "allocation_amount_numeric": 700000,
+                },
+                {
+                    **repeated_record,
+                    "project_key": "TRAIN-003",
+                    "ward": "14",
+                    "allocation_amount_numeric": 900000,
+                },
+            ]
+        )
+        proposal = {
+            **repeated_record,
+            "project_key": "LIVE-001",
+            "allocation_amount_numeric": 1500000,
+            "recommended_date": "2026-08-10",
+        }
+
+        result = self._service().evaluate(ProjectEvaluationInput(**proposal))
+
+        self.assertEqual(len(result.references["financial"]), 1)
+        self.assertEqual(result.references["financial"][0].work_clean, repeated_record["work_clean"])
 
 
 if __name__ == "__main__":

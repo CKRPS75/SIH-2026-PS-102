@@ -8,6 +8,12 @@ import { sanitizeAuditText } from "../utils/helpers";
 
 type JudgeState = "form" | "loading" | "result";
 
+function referenceDisplayKey(ref: {
+  work_clean: string;
+}): string {
+  return sanitizeAuditText(ref.work_clean).trim().toLowerCase();
+}
+
 function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudit: (p: Project) => void }) {
   const [state, setState] = useState<JudgeState>("form");
   const [loadStep, setLoadStep] = useState(0);
@@ -84,11 +90,19 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
       ["Financial", scores.financial ?? 0],
       ["Split Sanction", scores.split_sanction ?? 0],
     ];
-    const references = Object.entries(evaluation.references).flatMap(([group, refs]) =>
-      refs
-        .filter(ref => ref.source_dataset === "training")
-        .map(ref => ({ ...ref, group }))
-    );
+    const seenReferenceKeys = new Set<string>();
+    const references = Object.entries(evaluation.references)
+      .flatMap(([group, refs]) =>
+        refs
+          .filter(ref => ref.source_dataset === "training" || ref.source_dataset === "mplads_test" || ref.source_dataset === "MPLADS")
+          .map(ref => ({ ...ref, group }))
+      )
+      .filter(ref => {
+        const key = referenceDisplayKey(ref);
+        if (seenReferenceKeys.has(key)) return false;
+        seenReferenceKeys.add(key);
+        return true;
+      });
     const groupLabel: Record<string, string> = {
       financial: "Financial comparison",
       duplicates: "Duplicate comparison",
@@ -143,7 +157,7 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
         {references.length > 0 && (
           <Card>
             <div className="p-4 space-y-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>MPLADS Training Records</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>MPLADS Reference Records</div>
               {references.slice(0, 8).map((ref, index) => (
                 <div key={`${ref.group}-${index}`} className="rounded-2xl px-3 py-2" style={{ background: "#F3F0F9" }}>
                   <div className="text-[10px] font-semibold" style={{ color: "#79747E" }}>

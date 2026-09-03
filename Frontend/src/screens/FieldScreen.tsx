@@ -1,24 +1,95 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "../components/common/Card";
 import { FieldLocationMap } from "../components/common/FieldLocationMap";
-import { CameraModule } from "../components/common/CameraModule";
+import { CameraModule, type FieldCaptureMetadata } from "../components/common/CameraModule";
 import type { Project } from "../data/projects";
+import { formatCoordinates, haversineDistanceMeters, resolveProjectCoordinates, type Coordinates } from "../utils/geotag";
 
 // ── Field Screen ──────────────────────────────────────────────────────────────
 
 type FieldState = "project" | "camera" | "captured" | "exif" | "verified" | "pfms";
+type GeotagStatus = "approved" | "suspicious" | "manual";
+
+type GeotagVerification = {
+  status: GeotagStatus;
+  distanceMeters: number | null;
+  photoCoords: Coordinates | null;
+  targetCoords: Coordinates | null;
+  title: string;
+  message: string;
+};
+
+const FIELD_RADIUS_METERS = 1000;
+
+function formatDistance(distanceMeters: number | null): string {
+  if (distanceMeters === null) return "Not available";
+  if (distanceMeters >= 1000) return `${(distanceMeters / 1000).toFixed(2)} km`;
+  return `${Math.round(distanceMeters)} m`;
+}
+
+function verifyCaptureLocation(project: Project, metadata: FieldCaptureMetadata | null): GeotagVerification {
+  const targetCoords = resolveProjectCoordinates(project);
+  const photoCoords = metadata?.photoCoords ?? null;
+
+  if (!photoCoords) {
+    return {
+      status: "manual",
+      distanceMeters: null,
+      photoCoords,
+      targetCoords,
+      title: "Manual Location Review Needed",
+      message: "The photo was captured, but browser GPS metadata was not available. Ask the field officer to allow location permission and retake the photo.",
+    };
+  }
+
+  if (!targetCoords) {
+    return {
+      status: "manual",
+      distanceMeters: null,
+      photoCoords,
+      targetCoords,
+      title: "Manual Location Review Needed",
+      message: "The case location could not be converted into coordinates. Add verified latitude and longitude for this project before approving the field visit.",
+    };
+  }
+
+  const distanceMeters = haversineDistanceMeters(photoCoords, targetCoords);
+  if (distanceMeters <= FIELD_RADIUS_METERS) {
+    return {
+      status: "approved",
+      distanceMeters,
+      photoCoords,
+      targetCoords,
+      title: "Field Location Approved",
+      message: `The captured photo location is within the accepted 1 km radius of the project site.`,
+    };
+  }
+
+  return {
+    status: "suspicious",
+    distanceMeters,
+    photoCoords,
+    targetCoords,
+    title: "Suspicious Field Location",
+    message: `The captured photo location is outside the accepted 1 km radius of the project site. This field evidence should be reviewed before approval.`,
+  };
+}
 
 function FieldScreen({ assignments, selectedProjectId: requestedProjectId }: { assignments: Project[]; selectedProjectId?: string | null }) {
   const [state, setState] = useState<FieldState>("project");
   const [exifStep, setExifStep] = useState(0);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(assignments[0]?.id ?? null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [captureMetadata, setCaptureMetadata] = useState<FieldCaptureMetadata | null>(null);
+  const [geotagVerification, setGeotagVerification] = useState<GeotagVerification | null>(null);
 
   useEffect(() => {
     if (requestedProjectId && assignments.some((project) => project.id === requestedProjectId)) {
       setSelectedProjectId(requestedProjectId);
       setExifStep(0);
       setCapturedImage(null);
+      setCaptureMetadata(null);
+      setGeotagVerification(null);
       setState("project");
     }
   }, [assignments, requestedProjectId]);
@@ -33,10 +104,15 @@ function FieldScreen({ assignments, selectedProjectId: requestedProjectId }: { a
     setSelectedProjectId(project.id);
     setExifStep(0);
     setCapturedImage(null);
+    setCaptureMetadata(null);
+    setGeotagVerification(null);
     setState("camera");
   }
 
   function handleExtract() {
+    if (selectedProject) {
+      setGeotagVerification(verifyCaptureLocation(selectedProject, captureMetadata));
+    }
     setState("exif");
     let step = 0;
     const interval = window.setInterval(() => {
@@ -52,6 +128,8 @@ function FieldScreen({ assignments, selectedProjectId: requestedProjectId }: { a
   function resetToQueue() {
     setExifStep(0);
     setCapturedImage(null);
+    setCaptureMetadata(null);
+    setGeotagVerification(null);
     setState("project");
   }
 
@@ -174,8 +252,10 @@ function FieldScreen({ assignments, selectedProjectId: requestedProjectId }: { a
           <FieldLocationMap project={selectedProject} />
           <CameraModule
             project={selectedProject}
-            onCapture={(photoUrl) => {
+            onCapture={(photoUrl, metadata) => {
               setCapturedImage(photoUrl);
+              setCaptureMetadata(metadata);
+              setGeotagVerification(null);
               setState("captured");
             }}
             onCancel={resetToQueue}
@@ -218,6 +298,29 @@ function FieldScreen({ assignments, selectedProjectId: requestedProjectId }: { a
               </div>
             )}
           </div>
+          {captureMetadata && (
+            <Card>
+              <div className="p-4 space-y-2">
+                <div className="text-xs font-semibold" style={{ color: "#1C1B1F" }}>
+                  Captured Metadata
+                </div>
+                {[
+                  { l: "Photo GPS", v: captureMetadata.coordsText },
+                  { l: "GPS Accuracy", v: captureMetadata.accuracyMeters ? `${Math.round(captureMetadata.accuracyMeters)} m` : "Unavailable" },
+                  { l: "Captured At", v: new Date(captureMetadata.capturedAt).toLocaleString("en-IN") },
+                ].map((row) => (
+                  <div key={row.l} className="flex justify-between gap-3">
+                    <span className="text-[10px]" style={{ color: "#79747E" }}>
+                      {row.l}
+                    </span>
+                    <span className="text-[10px] font-semibold text-right" style={{ color: "#1C1B1F" }}>
+                      {row.v}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => {
@@ -279,16 +382,30 @@ function FieldScreen({ assignments, selectedProjectId: requestedProjectId }: { a
 
       {state === "verified" && selectedProject && (
         <div className="px-4 space-y-3 animate-scale-in">
-          <div className="rounded-3xl p-5" style={{ background: "#D4F8E8" }}>
+          <div
+            className="rounded-3xl p-5"
+            style={{
+              background: geotagVerification?.status === "suspicious" ? "#FFDAD6" : geotagVerification?.status === "manual" ? "#FFEFD6" : "#D4F8E8",
+            }}
+          >
             <div className="text-center mb-4">
-              <div className="text-base font-bold" style={{ color: "#006C4C" }}>
-                EXIF Location Verified
+              <div
+                className="text-base font-bold"
+                style={{ color: geotagVerification?.status === "suspicious" ? "#B3261E" : geotagVerification?.status === "manual" ? "#7C4F00" : "#006C4C" }}
+              >
+                {geotagVerification?.title ?? "Field Location Checked"}
               </div>
               <div className="text-xs mt-1" style={{ color: "#49454F" }}>
-                {selectedProject.location}
+                {geotagVerification?.message ?? selectedProject.location}
               </div>
-              <span className="inline-block mt-2 text-[10px] font-bold px-3 py-1 rounded-full" style={{ background: "#006C4C", color: "#FFFFFF" }}>
-                VERIFIED
+              <span
+                className="inline-block mt-2 text-[10px] font-bold px-3 py-1 rounded-full"
+                style={{
+                  background: geotagVerification?.status === "suspicious" ? "#B3261E" : geotagVerification?.status === "manual" ? "#7C4F00" : "#006C4C",
+                  color: "#FFFFFF",
+                }}
+              >
+                {geotagVerification?.status === "suspicious" ? "SUSPICIOUS" : geotagVerification?.status === "manual" ? "MANUAL REVIEW" : "APPROVED"}
               </span>
             </div>
           </div>
@@ -296,9 +413,14 @@ function FieldScreen({ assignments, selectedProjectId: requestedProjectId }: { a
             <div className="p-4 space-y-2 font-mono">
               {[
                 { l: "Project", v: selectedProject.id, vColor: "#4F46E5" },
-                { l: "Approved", v: selectedProject.coords, vColor: "#1C1B1F" },
-                { l: "Distance", v: "Within accepted site radius", vColor: "#006C4C" },
-                { l: "Device", v: "FIELD-DEVICE-204", vColor: "#1C1B1F" },
+                { l: "Photo GPS", v: formatCoordinates(geotagVerification?.photoCoords ?? null), vColor: "#1C1B1F" },
+                { l: "Case Location", v: formatCoordinates(geotagVerification?.targetCoords ?? null), vColor: "#1C1B1F" },
+                {
+                  l: "Distance",
+                  v: formatDistance(geotagVerification?.distanceMeters ?? null),
+                  vColor: geotagVerification?.status === "suspicious" ? "#B3261E" : geotagVerification?.status === "approved" ? "#006C4C" : "#7C4F00",
+                },
+                { l: "Allowed Radius", v: "1 km", vColor: "#1C1B1F" },
               ].map((row) => (
                 <div key={row.l} className="flex justify-between gap-3">
                   <span className="text-[10px]" style={{ color: "#79747E" }}>
@@ -311,9 +433,15 @@ function FieldScreen({ assignments, selectedProjectId: requestedProjectId }: { a
               ))}
             </div>
           </Card>
-          <button onClick={() => setState("pfms")} className="w-full h-14 rounded-3xl text-sm font-semibold text-white md-ripple" style={{ background: "#006C4C" }}>
-            Verify & Trigger PFMS Payment Release
-          </button>
+          {geotagVerification?.status === "approved" ? (
+            <button onClick={() => setState("pfms")} className="w-full h-14 rounded-3xl text-sm font-semibold text-white md-ripple" style={{ background: "#006C4C" }}>
+              Approve Field Visit & Trigger PFMS Payment Release
+            </button>
+          ) : (
+            <button onClick={resetToQueue} className="w-full h-14 rounded-3xl text-sm font-semibold text-white md-ripple" style={{ background: "#B3261E" }}>
+              Report Suspicious Field Evidence
+            </button>
+          )}
         </div>
       )}
 

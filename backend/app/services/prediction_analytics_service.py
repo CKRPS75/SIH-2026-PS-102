@@ -5,7 +5,17 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from app.schemas.analytics import AnalyticsSummary, PredictionDetail, PredictionListResponse, PredictionRow, StateRiskRow
+from app.schemas.analytics import (
+    AnalyticsSummary,
+    ConstituencyAnomalyRateResponse,
+    ConstituencyAnomalyRateRow,
+    PredictionDetail,
+    PredictionListResponse,
+    PredictionRow,
+    StateAnomalyRateResponse,
+    StateAnomalyRateRow,
+    StateRiskRow,
+)
 
 
 MODEL_OUTPUT_DIR = Path(__file__).resolve().parents[2] / "data" / "model_outputs"
@@ -50,8 +60,8 @@ class PredictionAnalyticsService:
         self.train_predictions_path = train_predictions_path
         self._cache: dict[str, tuple[tuple[float, ...], list[dict[str, str]]]] = {}
 
-    def summary(self) -> AnalyticsSummary:
-        rows = self._load_rows()
+    def summary(self, dataset: str = "all") -> AnalyticsSummary:
+        rows = self._load_rows(dataset)
         risk_counts = Counter(_text(row.get("model_risk_level")) or "UNKNOWN" for row in rows)
         flagged_rows = [row for row in rows if _text(row.get("model_risk_level")).upper() in {"YELLOW", "RED"}]
         top_states = Counter(_text(row.get("state")) or "Unknown" for row in flagged_rows)
@@ -65,11 +75,11 @@ class PredictionAnalyticsService:
             split_sanction_count=sum(_number(row.get("model_split_sanction_score")) >= 60 for row in rows),
             pending_count=sum(_number(row.get("model_pending_score")) > 0 for row in rows),
             top_states_by_yellow_red=dict(top_states.most_common(10)),
-            generated_from=str(self.predictions_path),
+            generated_from=self._dataset_source_label(dataset),
         )
 
-    def state_risk(self, limit: int = 20) -> list[StateRiskRow]:
-        rows = self._load_rows()
+    def state_risk(self, limit: int = 20, dataset: str = "all") -> list[StateRiskRow]:
+        rows = self._load_rows(dataset)
         grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
         for row in rows:
             grouped[_text(row.get("state")) or "Unknown"].append(row)
@@ -107,6 +117,119 @@ class PredictionAnalyticsService:
             :limit
         ]
 
+    def constituency_anomaly_rates(
+        self,
+        *,
+        limit: int = 10,
+        dataset: str = "all",
+        min_projects: int = 10,
+    ) -> ConstituencyAnomalyRateResponse:
+        rows = self._load_rows(dataset)
+        grouped: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
+        for row in rows:
+            state = _text(row.get("state")) or "Unknown"
+            constituency = _text(row.get("constituency")) or "Unknown"
+            grouped[(state, constituency)].append(row)
+
+        constituency_rows = []
+        for (state, constituency), group in grouped.items():
+            if len(group) < min_projects:
+                continue
+            risk_counts = Counter(_text(row.get("model_risk_level")).upper() for row in group)
+            anomalous_count = risk_counts.get("YELLOW", 0) + risk_counts.get("RED", 0)
+            total_count = len(group)
+            constituency_rows.append(
+                ConstituencyAnomalyRateRow(
+                    state=state,
+                    constituency=constituency,
+                    total_case_count=total_count,
+                    anomalous_case_count=anomalous_count,
+                    anomaly_rate=round((anomalous_count / total_count) * 100, 2) if total_count else 0.0,
+                    green_count=risk_counts.get("GREEN", 0),
+                    yellow_count=risk_counts.get("YELLOW", 0),
+                    red_count=risk_counts.get("RED", 0),
+                    duplicate_count=sum(_number(row.get("model_duplicate_score")) >= 65 for row in group),
+                    financial_anomaly_count=sum(_number(row.get("model_financial_score")) >= 45 for row in group),
+                    split_sanction_count=sum(_number(row.get("model_split_sanction_score")) >= 60 for row in group),
+                    pending_count=sum(_number(row.get("model_pending_score")) > 0 for row in group),
+                    total_allocation_amount=round(
+                        sum(_number(row.get("allocation_amount_numeric")) for row in group),
+                        2,
+                    ),
+                    mean_model_risk_score=round(
+                        sum(_number(row.get("model_risk_score")) for row in group) / total_count,
+                        2,
+                    ),
+                )
+            )
+
+        ranked_rows = sorted(
+            constituency_rows,
+            key=lambda row: (row.anomaly_rate, row.anomalous_case_count, row.total_case_count),
+            reverse=True,
+        )
+        return ConstituencyAnomalyRateResponse(
+            dataset=dataset,
+            total_constituencies=len(constituency_rows),
+            min_projects=min_projects,
+            rows=ranked_rows[:limit],
+        )
+
+    def state_anomaly_rates(
+        self,
+        *,
+        limit: int = 10,
+        dataset: str = "all",
+        min_projects: int = 10,
+    ) -> StateAnomalyRateResponse:
+        rows = self._load_rows(dataset)
+        grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
+        for row in rows:
+            grouped[_text(row.get("state")) or "Unknown"].append(row)
+
+        state_rows = []
+        for state, group in grouped.items():
+            if len(group) < min_projects:
+                continue
+            risk_counts = Counter(_text(row.get("model_risk_level")).upper() for row in group)
+            anomalous_count = risk_counts.get("YELLOW", 0) + risk_counts.get("RED", 0)
+            total_count = len(group)
+            state_rows.append(
+                StateAnomalyRateRow(
+                    state=state,
+                    total_case_count=total_count,
+                    anomalous_case_count=anomalous_count,
+                    anomaly_rate=round((anomalous_count / total_count) * 100, 2) if total_count else 0.0,
+                    green_count=risk_counts.get("GREEN", 0),
+                    yellow_count=risk_counts.get("YELLOW", 0),
+                    red_count=risk_counts.get("RED", 0),
+                    duplicate_count=sum(_number(row.get("model_duplicate_score")) >= 65 for row in group),
+                    financial_anomaly_count=sum(_number(row.get("model_financial_score")) >= 45 for row in group),
+                    split_sanction_count=sum(_number(row.get("model_split_sanction_score")) >= 60 for row in group),
+                    pending_count=sum(_number(row.get("model_pending_score")) > 0 for row in group),
+                    total_allocation_amount=round(
+                        sum(_number(row.get("allocation_amount_numeric")) for row in group),
+                        2,
+                    ),
+                    mean_model_risk_score=round(
+                        sum(_number(row.get("model_risk_score")) for row in group) / total_count,
+                        2,
+                    ),
+                )
+            )
+
+        ranked_rows = sorted(
+            state_rows,
+            key=lambda row: (row.anomaly_rate, row.anomalous_case_count, row.total_case_count),
+            reverse=True,
+        )
+        return StateAnomalyRateResponse(
+            dataset=dataset,
+            total_states=len(state_rows),
+            min_projects=min_projects,
+            rows=ranked_rows[:limit],
+        )
+
     def predictions(
         self,
         *,
@@ -115,7 +238,7 @@ class PredictionAnalyticsService:
         category: str | None = None,
         mp: str | None = None,
         ida: str | None = None,
-        dataset: str = "test",
+        dataset: str = "all",
         mp_match: str = "contains",
         isolation_forest_only: bool = False,
         limit: int = 100,
@@ -139,9 +262,9 @@ class PredictionAnalyticsService:
             rows=[self._to_prediction_row(row) for row in paged],
         )
 
-    def prediction_detail(self, project_key: str) -> PredictionDetail | None:
+    def prediction_detail(self, project_key: str, dataset: str = "all") -> PredictionDetail | None:
         wanted = project_key.strip().lower()
-        for row in self._load_rows():
+        for row in self._load_rows(dataset):
             if _text(row.get("project_key")).lower() == wanted:
                 parsed = self._to_prediction_row(row)
                 return PredictionDetail(**parsed.model_dump(), raw=row)
@@ -210,6 +333,13 @@ class PredictionAnalyticsService:
                 rows.extend(dict(row) for row in csv.DictReader(file))
         self._cache[dataset] = (cache_key, rows)
         return rows
+
+    def _dataset_source_label(self, dataset: str) -> str:
+        if dataset == "all":
+            return f"{self.train_predictions_path}; {self.predictions_path}"
+        if dataset == "train":
+            return str(self.train_predictions_path)
+        return str(self.predictions_path)
 
     def _to_prediction_row(self, row: dict[str, str]) -> PredictionRow:
         reasons = [_text(reason) for reason in _text(row.get("model_reasons")).split("|") if _text(reason)]

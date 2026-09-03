@@ -98,6 +98,12 @@ def _reference_from_row(row: pd.Series, match_type: str, similarity: float | Non
     )
 
 
+def _unique_reference_rows(rows: pd.DataFrame) -> pd.DataFrame:
+    if rows.empty:
+        return rows
+    return rows.drop_duplicates(subset=["work_clean"], keep="first")
+
+
 class JsonEvaluationService:
     def __init__(
         self,
@@ -259,7 +265,7 @@ class JsonEvaluationService:
         references = {
             "financial": [
                 _reference_from_row(match, "similar work in the same area")
-                for _, match in financial_matches.head(10).iterrows()
+                for _, match in _unique_reference_rows(financial_matches).head(10).iterrows()
             ],
             "duplicates": [
                 _reference_from_row(
@@ -267,11 +273,11 @@ class JsonEvaluationService:
                     "similar work in the same locality and ward",
                     similarity=round(float(match.get("similarity", 0.0)), 4),
                 )
-                for _, match in duplicate_matches.head(10).iterrows()
+                for _, match in _unique_reference_rows(duplicate_matches).head(10).iterrows()
             ],
             "split_sanctions": [
                 _reference_from_row(match, "near-Rs 5 lakh work in the same locality and ward")
-                for _, match in split_matches.head(10).iterrows()
+                for _, match in _unique_reference_rows(split_matches).head(10).iterrows()
             ],
         }
         reason_description = self._reason_description(
