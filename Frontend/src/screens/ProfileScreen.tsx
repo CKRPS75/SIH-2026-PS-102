@@ -38,32 +38,9 @@ export function ProfileScreen({ onClose }: ProfileScreenProps) {
   ];
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col animate-scale-in" style={{ background: "#F3F0F9" }}>
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 shrink-0" style={{ background: "#FFFBFE", borderBottom: "1px solid #ECE6F0" }}>
-        <button
-          onClick={onClose}
-          className="w-9 h-9 rounded-full flex items-center justify-center md-ripple"
-          style={{ color: "#49454F" }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-          </svg>
-        </button>
-        <div className="flex-1">
-          <div className="text-base font-semibold" style={{ color: "#1C1B1F", fontFamily: "'Google Sans', sans-serif" }}>
-            Profile
-          </div>
-        </div>
-        {!editing && (
-          <button
-            onClick={() => { setDraft(profile); setEditing(true); }}
-            className="h-8 px-4 rounded-full text-xs font-semibold md-ripple"
-            style={{ background: "#E8E7FF", color: "#4F46E5" }}
-          >
-            Edit
-          </button>
-        )}
+    <div className="flex h-full flex-col animate-fade-in" style={{ background: "#F3F0F9" }}>
+      <div className="flex items-center justify-end px-8 pt-6">
+        {!editing && <button onClick={() => { setDraft(profile); setEditing(true); }} className="h-9 px-4 rounded-lg text-xs font-semibold md-ripple" style={{ background: "#E8E7FF", color: "#4F46E5" }}>Edit Profile</button>}
       </div>
 
       {/* Success banner */}
@@ -74,7 +51,7 @@ export function ProfileScreen({ onClose }: ProfileScreenProps) {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-8 py-4 space-y-4 max-w-3xl">
         {/* Avatar + Name */}
         <Card>
           <div className="p-5 flex items-center gap-4">

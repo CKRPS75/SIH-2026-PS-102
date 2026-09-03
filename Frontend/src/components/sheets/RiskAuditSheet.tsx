@@ -33,13 +33,12 @@ function RiskAuditSheet({
 
   function handleFieldAudit() {
     onRequestFieldAudit(project);
-    setAction("field");
-    window.setTimeout(onClose, 700);
+    onClose();
   }
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col justify-end animate-fade-in" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
-      <div className="rounded-t-[28px] flex flex-col max-h-[92%] animate-slide-up" style={{ background: "#FFFBFE" }} onClick={(e) => e.stopPropagation()}>
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-4 animate-fade-in" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+      <div className="w-full max-w-3xl rounded-[28px] flex flex-col max-h-[92%] animate-scale-in" style={{ background: "#FFFBFE" }} onClick={(e) => e.stopPropagation()}>
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-2 shrink-0">
           <div className="w-8 h-1 rounded-full" style={{ background: "#CAC4D0" }} />

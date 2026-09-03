@@ -17,7 +17,6 @@ export type OfficerProfile = {
 
 export type Preferences = {
   theme: "light" | "dark" | "system";
-  language: "en" | "hi";
   notifAuditAlerts: boolean;
   notifHighRisk: boolean;
   notifFieldAudit: boolean;
@@ -50,7 +49,6 @@ const DEFAULT_PROFILE: OfficerProfile = {
 
 const DEFAULT_PREFS: Preferences = {
   theme: "light",
-  language: "en",
   notifAuditAlerts: true,
   notifHighRisk: true,
   notifFieldAudit: true,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "../components/common/Card";
 import { FieldLocationMap } from "../components/common/FieldLocationMap";
 import { CameraModule } from "../components/common/CameraModule";
@@ -8,11 +8,20 @@ import type { Project } from "../data/projects";
 
 type FieldState = "project" | "camera" | "captured" | "exif" | "verified" | "pfms";
 
-function FieldScreen({ assignments }: { assignments: Project[] }) {
+function FieldScreen({ assignments, selectedProjectId: requestedProjectId }: { assignments: Project[]; selectedProjectId?: string | null }) {
   const [state, setState] = useState<FieldState>("project");
   const [exifStep, setExifStep] = useState(0);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(assignments[0]?.id ?? null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (requestedProjectId && assignments.some((project) => project.id === requestedProjectId)) {
+      setSelectedProjectId(requestedProjectId);
+      setExifStep(0);
+      setCapturedImage(null);
+      setState("project");
+    }
+  }, [assignments, requestedProjectId]);
 
   const selectedProject = useMemo(() => {
     return assignments.find((project) => project.id === selectedProjectId) ?? assignments[0] ?? null;

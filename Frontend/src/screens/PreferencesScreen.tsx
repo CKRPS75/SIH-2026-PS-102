@@ -54,22 +54,7 @@ export function PreferencesScreen({ onClose }: PreferencesScreenProps) {
   }
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col animate-scale-in" style={{ background: "#F3F0F9" }}>
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 shrink-0" style={{ background: "#FFFBFE", borderBottom: "1px solid #ECE6F0" }}>
-        <button
-          onClick={onClose}
-          className="w-9 h-9 rounded-full flex items-center justify-center md-ripple"
-          style={{ color: "#49454F" }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-          </svg>
-        </button>
-        <div className="text-base font-semibold flex-1" style={{ color: "#1C1B1F", fontFamily: "'Google Sans', sans-serif" }}>
-          Preferences
-        </div>
-      </div>
+    <div className="flex h-full flex-col animate-fade-in" style={{ background: "#F3F0F9" }}>
 
       {saved && (
         <div className="mx-4 mt-3 px-4 py-2.5 rounded-2xl text-xs font-medium flex items-center gap-2 animate-scale-in" style={{ background: "#D4F8E8", color: "#006C4C" }}>
@@ -78,7 +63,7 @@ export function PreferencesScreen({ onClose }: PreferencesScreenProps) {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4 max-w-3xl">
         {/* Appearance */}
         <div>
           <div className="text-xs font-semibold uppercase tracking-widest mb-2 px-1" style={{ color: "#79747E" }}>Appearance</div>
@@ -101,29 +86,6 @@ export function PreferencesScreen({ onClose }: PreferencesScreenProps) {
                   </button>
                 ))}
               </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Language */}
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-widest mb-2 px-1" style={{ color: "#79747E" }}>Language</div>
-          <Card>
-            <div className="p-4 flex gap-2">
-              {([["en", "English"], ["hi", "हिन्दी"]] as const).map(([code, label]) => (
-                <button
-                  key={code}
-                  onClick={() => set("language", code)}
-                  className="flex-1 py-2 rounded-2xl text-xs font-semibold md-ripple"
-                  style={{
-                    background: prefs.language === code ? "#4F46E5" : "#F3F0F9",
-                    color: prefs.language === code ? "#FFFFFF" : "#49454F",
-                    border: prefs.language === code ? "none" : "1px solid #CAC4D0",
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
             </div>
           </Card>
         </div>

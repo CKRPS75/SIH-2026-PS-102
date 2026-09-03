@@ -240,7 +240,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
   }
 
   return (
-    <div className="flex-1 overflow-y-auto" style={{ background: "#F3F0F9" }}>
+    <div className="dashboard-screen flex-1 overflow-y-auto" style={{ background: "#F3F0F9" }}>
       {/* Top App Bar */}
       <div className="px-4 pt-2 pb-3" style={{ background: "#F3F0F9" }}>
         <div className="flex items-center justify-between">

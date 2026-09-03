@@ -82,34 +82,10 @@ export function AuditLogsScreen({ onClose }: AuditLogsScreenProps) {
   }
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col animate-scale-in" style={{ background: "#F3F0F9" }}>
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 shrink-0" style={{ background: "#FFFBFE", borderBottom: "1px solid #ECE6F0" }}>
-        <button
-          onClick={onClose}
-          className="w-9 h-9 rounded-full flex items-center justify-center md-ripple"
-          style={{ color: "#49454F" }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-          </svg>
-        </button>
-        <div className="text-base font-semibold flex-1" style={{ color: "#1C1B1F", fontFamily: "'Google Sans', sans-serif" }}>
-          Audit Logs
-        </div>
-        <button
-          onClick={() => setShowFilters((v) => !v)}
-          className="w-9 h-9 rounded-full flex items-center justify-center md-ripple"
-          style={{ background: showFilters ? "#E8E7FF" : "transparent", color: showFilters ? "#4F46E5" : "#49454F" }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M4.25 5.61C6.27 8.2 10 13 10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-6s3.72-4.8 5.74-7.39A.998.998 0 0018.95 4H5.04a1 1 0 00-.79 1.61z" />
-          </svg>
-        </button>
-      </div>
+    <div className="flex h-full flex-col animate-fade-in" style={{ background: "#F3F0F9" }}>
 
       {/* Search */}
-      <div className="px-4 pt-3 shrink-0">
+      <div className="px-8 pt-6 shrink-0 flex gap-3">
         <div className="flex items-center gap-2 px-3 rounded-2xl" style={{ background: "#FFFBFE", border: "1px solid #CAC4D0" }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="#79747E">
             <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
@@ -122,6 +98,7 @@ export function AuditLogsScreen({ onClose }: AuditLogsScreenProps) {
             className="flex-1 py-2.5 text-xs outline-none bg-transparent"
             style={{ color: "#1C1B1F" }}
           />
+          <button onClick={() => setShowFilters((v) => !v)} className="w-10 rounded-lg flex items-center justify-center" style={{ background: showFilters ? "#E8E7FF" : "#FFFBFE", color: "#4F46E5" }} aria-label="Toggle filters">☷</button>
           {search && (
             <button onClick={() => setSearch("")} style={{ color: "#79747E" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
@@ -132,7 +109,7 @@ export function AuditLogsScreen({ onClose }: AuditLogsScreenProps) {
 
       {/* Filters */}
       {showFilters && (
-        <div className="px-4 pt-3 space-y-2 shrink-0 animate-fade-in">
+        <div className="px-8 pt-3 space-y-2 shrink-0 animate-fade-in">
           {/* Sort */}
           <div className="flex gap-2">
             {(["newest", "oldest"] as const).map((s) => (
@@ -172,7 +149,7 @@ export function AuditLogsScreen({ onClose }: AuditLogsScreenProps) {
       )}
 
       {/* Logs */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+      <div className="flex-1 overflow-y-auto px-8 py-3 space-y-2">
         {/* Count */}
         <div className="text-[10px] font-medium px-1" style={{ color: "#79747E" }}>
           {filtered.length} {filtered.length === 1 ? "entry" : "entries"} · Page {page} of {totalPages}

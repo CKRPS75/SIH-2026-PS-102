@@ -95,7 +95,11 @@ export function RiskIntelligenceMap({ projects, onOpenAudit }: RiskIntelligenceM
                     {p.amount} · Risk: {p.risk}/100
                   </div>
                   <button
-                    onClick={() => onOpenAudit(p)}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOpenAudit(p);
+                    }}
                     style={{
                       width: "100%",
                       padding: "5px 8px",
