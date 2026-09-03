@@ -81,9 +81,11 @@ def list_predictions(
     state: str | None = None,
     category: str | None = None,
     mp: str | None = Query(default=None, description="Case-insensitive MP name search"),
+    mp_match: str = Query(default="contains", pattern="^(contains|exact)$"),
     ida: str | None = Query(default=None, description="Case-insensitive implementing agency search"),
+    dataset: str = Query(default="test", pattern="^(test|train|all)$"),
     isolation_forest_only: bool = Query(default=False),
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=100, ge=1, le=70000),
     offset: int = Query(default=0, ge=0),
 ) -> PredictionListResponse:
     try:
@@ -92,7 +94,9 @@ def list_predictions(
             state=state,
             category=category,
             mp=mp,
+            mp_match=mp_match,
             ida=ida,
+            dataset=dataset,
             isolation_forest_only=isolation_forest_only,
             limit=limit,
             offset=offset,

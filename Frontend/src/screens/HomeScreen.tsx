@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import type { Project, Filter } from "../data/projects";
+import { getPredictions, type PredictionRow } from "../api";
 import { riskColor } from "../utils/helpers";
 import { Chip } from "../components/common/Chip";
 import { Card } from "../components/common/Card";
@@ -81,6 +82,13 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
   const [selectedConstituency, setSelectedConstituency] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("2 min ago");
+  const [dashboardSection, setDashboardSection] = useState<"statistics" | "alerts">("statistics");
+  const [mpQuery, setMpQuery] = useState("");
+  const [searchedMp, setSearchedMp] = useState("");
+  const [mpProjects, setMpProjects] = useState<PredictionRow[]>([]);
+  const [mpProjectTotal, setMpProjectTotal] = useState(0);
+  const [mpSearchError, setMpSearchError] = useState<string | null>(null);
+  const [isMpSearchLoading, setIsMpSearchLoading] = useState(false);
 
   const filters: Filter[] = ["All", "Duplicates", "Overpricing", "Split Sanctions"];
   const riskBucketStats = RISK_BUCKETS.map(bucket => {
@@ -239,6 +247,27 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
     setTimeout(() => { setRefreshing(false); setLastUpdated("Just now"); }, 1600);
   }
 
+  async function handleMpSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const mpName = mpQuery.trim();
+    if (!mpName) return;
+
+    setIsMpSearchLoading(true);
+    setMpSearchError(null);
+    setSearchedMp(mpName);
+    try {
+      const response = await getPredictions({ mp: mpName, dataset: "all", mpMatch: "exact" });
+      setMpProjects(response.rows);
+      setMpProjectTotal(response.total);
+    } catch (searchError) {
+      setMpProjects([]);
+      setMpProjectTotal(0);
+      setMpSearchError(searchError instanceof Error ? searchError.message : "Could not load MP projects");
+    } finally {
+      setIsMpSearchLoading(false);
+    }
+  }
+
   return (
     <div className="dashboard-screen flex-1 overflow-y-auto" style={{ background: "#F3F0F9" }}>
       {/* Top App Bar */}
@@ -277,6 +306,80 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
             {k.caption && <div className="text-[9px] mt-0.5 truncate" style={{ color: k.text, opacity: 0.72 }}>{k.caption}</div>}
           </div>
         ))}
+      </div>
+
+      <div className="px-4 mt-5">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl p-1" style={{ background: "#ECE6F0" }}>
+          <button
+            onClick={() => setDashboardSection("statistics")}
+            className="h-9 rounded-xl text-xs font-semibold md-ripple"
+            style={{ background: dashboardSection === "statistics" ? "#FFFBFE" : "transparent", color: "#1C1B1F" }}
+          >
+            Statistics
+          </button>
+          <button
+            onClick={() => setDashboardSection("alerts")}
+            className="h-9 rounded-xl text-xs font-semibold md-ripple"
+            style={{ background: dashboardSection === "alerts" ? "#FFFBFE" : "transparent", color: "#1C1B1F" }}
+          >
+            Live Alert Feed{alerts.length ? ` (${alerts.length})` : ""}
+          </button>
+        </div>
+      </div>
+
+      {dashboardSection === "statistics" && <>
+      <div className="px-4 mt-4">
+        <Card>
+          <div className="p-4 space-y-4">
+            <div>
+              <div className="text-sm font-semibold" style={{ fontFamily: "'Google Sans', sans-serif", color: "#1C1B1F" }}>MP Project Allocation</div>
+              <div className="text-xs mt-1" style={{ color: "#49454F" }}>Exact MP-name search across the full MPLADS model dataset</div>
+            </div>
+            <form onSubmit={handleMpSearch}>
+              <input
+                value={mpQuery}
+                onChange={event => setMpQuery(event.target.value)}
+                placeholder="Enter MP name and press Enter"
+                aria-label="MP name"
+                className="w-full h-11 rounded-xl border px-3 text-sm outline-none"
+                style={{ background: "#FFFBFE", borderColor: "#CAC4D0", color: "#1C1B1F" }}
+              />
+            </form>
+            {isMpSearchLoading && <div className="text-xs" style={{ color: "#49454F" }}>Loading projects...</div>}
+            {mpSearchError && <div className="text-xs" style={{ color: "#B3261E" }}>{mpSearchError}</div>}
+            {!isMpSearchLoading && searchedMp && !mpSearchError && mpProjects.length === 0 && (
+              <div className="text-xs" style={{ color: "#49454F" }}>No scored MPLADS projects found for {searchedMp}.</div>
+            )}
+            {mpProjects.length > 0 && (() => {
+              const chartProjects = [...mpProjects]
+                .sort((first, second) => second.allocation_amount_numeric - first.allocation_amount_numeric)
+                .slice(0, 12);
+              const maximumAmount = Math.max(...chartProjects.map(project => project.allocation_amount_numeric), 1);
+              return (
+                <div className="space-y-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>
+                    {mpProjects[0]?.mp_name || searchedMp} · {mpProjectTotal} project rows
+                  </div>
+                  {chartProjects.map(project => (
+                    <div key={project.project_key} className="grid grid-cols-[minmax(0,1fr)_56px] gap-3 items-center">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-semibold truncate" title={project.work_clean || "Untitled project"} style={{ color: "#1C1B1F" }}>
+                          {project.work_clean || "Untitled project"}
+                        </div>
+                        <div className="mt-1 h-3 rounded-full overflow-hidden" style={{ background: "#F3F0F9" }}>
+                          <div className="h-full rounded-full" style={{ width: `${Math.max(4, (project.allocation_amount_numeric / maximumAmount) * 100)}%`, background: "#4F46E5" }} />
+                        </div>
+                      </div>
+                      <div className="text-right text-[10px] font-semibold" style={{ color: "#1A006E" }}>
+                        {amountLabelFromRupees(project.allocation_amount_numeric)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </Card>
       </div>
 
       {/* Overall risk distribution */}
@@ -458,8 +561,10 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
         </Card>
       </div>
 
-      {/* Alert Feed */}
-      <div className="px-4 mt-4 mb-4">
+      </>}
+
+      {dashboardSection === "alerts" && <div className="px-4 mt-4 mb-4">
+        {/* Alert Feed */}
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold" style={{ fontFamily: "'Google Sans', sans-serif", color: "#1C1B1F" }}>Live Alert Feed</div>
           <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#FFDAD6", color: "#B3261E" }}>{alerts.length} active</span>
@@ -494,7 +599,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
             </Card>
           ))}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

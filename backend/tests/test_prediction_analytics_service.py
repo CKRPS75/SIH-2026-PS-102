@@ -12,6 +12,7 @@ class PredictionAnalyticsServiceTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.predictions_path = Path(self.temp_dir.name) / "test_predictions.csv"
+        self.train_predictions_path = Path(self.temp_dir.name) / "train_predictions.csv"
         rows = [
             {
                 "project_key": "P-001",
@@ -87,6 +88,14 @@ class PredictionAnalyticsServiceTest(unittest.TestCase):
             writer = csv.DictWriter(file, fieldnames=list(rows[0]))
             writer.writeheader()
             writer.writerows(rows)
+        train_rows = [
+            {**rows[0], "project_key": "T-001", "mp_name": "Smt Jaskaur Meena"},
+            {**rows[1], "project_key": "T-002", "mp_name": "Smt Jaskaur Meena Devi"},
+        ]
+        with self.train_predictions_path.open("w", encoding="utf-8", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=list(train_rows[0]))
+            writer.writeheader()
+            writer.writerows(train_rows)
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
@@ -104,7 +113,7 @@ class PredictionAnalyticsServiceTest(unittest.TestCase):
         self.assertEqual(summary.top_states_by_yellow_red, {"Uttar Pradesh": 1, "Gujarat": 1})
 
     def test_predictions_support_filters_and_detail_lookup(self) -> None:
-        service = PredictionAnalyticsService(self.predictions_path)
+        service = PredictionAnalyticsService(self.predictions_path, self.train_predictions_path)
 
         filtered = service.predictions(state="Uttar Pradesh", category="Road", mp="asha", limit=10)
         self.assertEqual(filtered.total, 2)
@@ -118,6 +127,16 @@ class PredictionAnalyticsServiceTest(unittest.TestCase):
         self.assertIsNotNone(detail)
         self.assertEqual(detail.model_reasons, ["Repeated work", "Financial pattern is unusual"])
         self.assertEqual(detail.raw["ida"], "Agency One")
+
+    def test_predictions_can_search_exact_mp_across_train_and_test(self) -> None:
+        service = PredictionAnalyticsService(self.predictions_path, self.train_predictions_path)
+
+        exact = service.predictions(mp="Smt Jaskaur Meena", mp_match="exact", dataset="all", limit=10)
+        contains = service.predictions(mp="Smt Jaskaur Meena", mp_match="contains", dataset="all", limit=10)
+
+        self.assertEqual(exact.total, 1)
+        self.assertEqual(exact.rows[0].project_key, "T-001")
+        self.assertEqual(contains.total, 2)
 
 
 if __name__ == "__main__":

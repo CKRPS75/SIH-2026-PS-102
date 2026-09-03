@@ -85,7 +85,9 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
       ["Split Sanction", scores.split_sanction ?? 0],
     ];
     const references = Object.entries(evaluation.references).flatMap(([group, refs]) =>
-      refs.map(ref => ({ ...ref, group }))
+      refs
+        .filter(ref => ref.source_dataset === "training")
+        .map(ref => ({ ...ref, group }))
     );
     const groupLabel: Record<string, string> = {
       financial: "Financial comparison",
@@ -141,7 +143,7 @@ function JudgeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAud
         {references.length > 0 && (
           <Card>
             <div className="p-4 space-y-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>Compared Records</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>MPLADS Training Records</div>
               {references.slice(0, 8).map((ref, index) => (
                 <div key={`${ref.group}-${index}`} className="rounded-2xl px-3 py-2" style={{ background: "#F3F0F9" }}>
                   <div className="text-[10px] font-semibold" style={{ color: "#79747E" }}>

@@ -45,6 +45,39 @@ OpenAPI will be available at:
 http://127.0.0.1:8000/docs
 ```
 
+## Gemini Flash Summary Setup
+
+The JSON evaluation API can optionally use Gemini Flash to rewrite the technical `comment` and `reason_description` into short, citizen-friendly language. The ML/rule result is still calculated locally first; Flash only rewrites the explanation text.
+
+Create `backend/.env` from the example file:
+
+```powershell
+cd "C:\Users\barha\OneDrive\Documents\SIH\SIH-2026-PS-102\backend"
+Copy-Item .env.example .env
+notepad .env
+```
+
+Add your key in `.env`:
+
+```text
+GEMINI_API_KEY=your_api_key_here
+GEMINI_FLASH_MODEL=gemini-3.5-flash
+GEMINI_FLASH_TIMEOUT_SECONDS=8
+```
+
+Restart the backend after saving `.env`:
+
+```powershell
+.\.venv\Scripts\uvicorn app.main:app --reload
+```
+
+Security requirements:
+
+- Do not paste the API key into frontend code.
+- Do not commit `backend/.env`.
+- Use a Gemini API key restricted to the Gemini API when possible.
+- If the API key is missing or the API request fails, the backend automatically returns the local fallback explanation.
+
 ## Core Endpoints
 
 - `GET /health`

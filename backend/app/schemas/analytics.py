@@ -78,7 +78,12 @@ class PredictionRow(BaseModel):
     category: str | None = None
     work_clean: str | None = None
     locality: str | None = None
+    ward: str | None = None
+    block: str | None = None
     recommended_date: str | None = None
+    status: str | None = None
+    ida_approval: str | None = None
+    source_dataset: str | None = None
     allocation_amount_numeric: float = 0.0
     model_risk_score: float = 0.0
     model_risk_level: str = "GREEN"

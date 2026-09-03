@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 from pathlib import Path
@@ -13,12 +12,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from app.schemas.analytics import EvaluationReference, JsonEvaluationResponse, ProjectEvaluationInput
+from app.services.flash_summarization_service import FlashSummarizationService
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 MODEL_OUTPUT_DIR = BASE_DIR / "data" / "model_outputs"
-MOCK_RECORDS_PATH = BASE_DIR / "data" / "mock" / "mock_input_records.json"
 TRAIN_PREDICTIONS_PATH = MODEL_OUTPUT_DIR / "train_predictions.csv"
+TEST_PREDICTIONS_PATH = MODEL_OUTPUT_DIR / "test_predictions.csv"
 ISOLATION_FOREST_MODEL_PATH = MODEL_OUTPUT_DIR / "isolation_forest_model.joblib"
 COST_OUTLIER_MEDIAN_RATIO_THRESHOLD = 2.5
 DUPLICATE_SIMILARITY_THRESHOLD = 0.80
@@ -102,11 +102,12 @@ class JsonEvaluationService:
     def __init__(
         self,
         train_predictions_path: Path = TRAIN_PREDICTIONS_PATH,
-        mock_records_path: Path = MOCK_RECORDS_PATH,
+        test_predictions_path: Path = TEST_PREDICTIONS_PATH,
         isolation_forest_model_path: Path = ISOLATION_FOREST_MODEL_PATH,
+        summarization_service: FlashSummarizationService | None = None,
     ) -> None:
         self.train_predictions_path = train_predictions_path
-        self.mock_records_path = mock_records_path
+        self.test_predictions_path = test_predictions_path
         self.isolation_forest_model_path = isolation_forest_model_path
         self._cache_key: tuple[float, float] | None = None
         self._reference_rows: pd.DataFrame | None = None
@@ -115,6 +116,7 @@ class JsonEvaluationService:
         self._sbert_model: Any | None = None
         self._sbert_failed = False
         self._use_sentence_bert = os.getenv("MPLADS_USE_SENTENCE_BERT", "").strip().lower() in {"1", "true", "yes"}
+        self.summarization_service = summarization_service or FlashSummarizationService()
 
     def evaluate(self, proposal: ProjectEvaluationInput) -> JsonEvaluationResponse:
         reference = self._reference()
@@ -286,6 +288,26 @@ class JsonEvaluationService:
             },
             references=references,
         )
+        component_scores = {
+            "duplicate": round(duplicate_score, 2),
+            "financial": round(financial_score, 2),
+            "financial_rule": round(rule_financial_score, 2),
+            "isolation_forest": round(isolation_forest_risk, 2),
+            "split_sanction": round(split_score, 2),
+            "pending": round(pending_score, 2),
+        }
+        comment = _comment(flag, model_reasons)
+        ai_summary = self.summarization_service.summarize(
+            flag=flag,
+            rating=rating,
+            comment=comment,
+            reason_description=reason_description,
+            reasons=model_reasons,
+            component_scores=component_scores,
+        )
+        if ai_summary:
+            comment = ai_summary.comment
+            reason_description = ai_summary.reason_description
 
         return JsonEvaluationResponse(
             project_key=_text(row.get("project_key")) or "LIVE-JSON",
@@ -293,17 +315,10 @@ class JsonEvaluationService:
             flag_color=_flag_color(flag),
             rating=rating,
             risk_score=risk_score,
-            comment=_comment(flag, model_reasons),
+            comment=comment,
             reason_description=reason_description,
             reasons=model_reasons,
-            component_scores={
-                "duplicate": round(duplicate_score, 2),
-                "financial": round(financial_score, 2),
-                "financial_rule": round(rule_financial_score, 2),
-                "isolation_forest": round(isolation_forest_risk, 2),
-                "split_sanction": round(split_score, 2),
-                "pending": round(pending_score, 2),
-            },
+            component_scores=component_scores,
             median_context=medians,
             ratio_context=ratios,
             references=references,
@@ -312,15 +327,15 @@ class JsonEvaluationService:
     def _reference(self) -> pd.DataFrame:
         if not self.train_predictions_path.exists():
             raise FileNotFoundError(f"Training predictions file not found: {self.train_predictions_path}")
-        if not self.mock_records_path.exists():
-            raise FileNotFoundError(f"Mock input records file not found: {self.mock_records_path}")
+        if not self.test_predictions_path.exists():
+            raise FileNotFoundError(f"Test predictions file not found: {self.test_predictions_path}")
 
-        cache_key = (self.train_predictions_path.stat().st_mtime, self.mock_records_path.stat().st_mtime)
+        cache_key = (self.train_predictions_path.stat().st_mtime, self.test_predictions_path.stat().st_mtime)
         if self._cache_key == cache_key and self._reference_rows is not None:
             return self._reference_rows
 
         train = pd.read_csv(self.train_predictions_path, dtype=str).fillna("")
-        mock = pd.DataFrame(json.loads(self.mock_records_path.read_text(encoding="utf-8"))).fillna("")
+        test = pd.read_csv(self.test_predictions_path, dtype=str).fillna("")
         common_columns = [
             "project_key",
             "mp_name",
@@ -334,15 +349,15 @@ class JsonEvaluationService:
             "recommended_date",
             "allocation_amount_numeric",
         ]
-        for frame in [train, mock]:
+        for frame in [train, test]:
             for column in common_columns:
                 if column not in frame:
                     frame[column] = ""
         train = train[common_columns].copy()
         train["source_dataset"] = "training"
-        mock = mock[common_columns].copy()
-        mock["source_dataset"] = "mock_input"
-        reference = pd.concat([train, mock], ignore_index=True)
+        test = test[common_columns].copy()
+        test["source_dataset"] = "mplads_test"
+        reference = pd.concat([train, test], ignore_index=True)
         reference["allocation_amount_numeric"] = reference["allocation_amount_numeric"].map(_number)
 
         for column in ["mp_name", "state", "constituency", "ida", "category", "work_clean", "locality", "ward"]:

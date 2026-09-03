@@ -8,7 +8,9 @@ from typing import Any
 from app.schemas.analytics import AnalyticsSummary, PredictionDetail, PredictionListResponse, PredictionRow, StateRiskRow
 
 
-DEFAULT_PREDICTIONS_PATH = Path(__file__).resolve().parents[2] / "data" / "model_outputs" / "test_predictions.csv"
+MODEL_OUTPUT_DIR = Path(__file__).resolve().parents[2] / "data" / "model_outputs"
+DEFAULT_PREDICTIONS_PATH = MODEL_OUTPUT_DIR / "test_predictions.csv"
+DEFAULT_TRAIN_PREDICTIONS_PATH = MODEL_OUTPUT_DIR / "train_predictions.csv"
 
 
 def _number(value: Any) -> float:
@@ -34,11 +36,19 @@ def _matches(value: str, expected: str | None) -> bool:
     return value.strip().lower() == expected.strip().lower()
 
 
+def _normalize_search(value: str) -> str:
+    return " ".join(value.strip().lower().split())
+
+
 class PredictionAnalyticsService:
-    def __init__(self, predictions_path: Path = DEFAULT_PREDICTIONS_PATH) -> None:
+    def __init__(
+        self,
+        predictions_path: Path = DEFAULT_PREDICTIONS_PATH,
+        train_predictions_path: Path = DEFAULT_TRAIN_PREDICTIONS_PATH,
+    ) -> None:
         self.predictions_path = predictions_path
-        self._cache_mtime: float | None = None
-        self._rows: list[dict[str, str]] = []
+        self.train_predictions_path = train_predictions_path
+        self._cache: dict[str, tuple[tuple[float, ...], list[dict[str, str]]]] = {}
 
     def summary(self) -> AnalyticsSummary:
         rows = self._load_rows()
@@ -105,6 +115,8 @@ class PredictionAnalyticsService:
         category: str | None = None,
         mp: str | None = None,
         ida: str | None = None,
+        dataset: str = "test",
+        mp_match: str = "contains",
         isolation_forest_only: bool = False,
         limit: int = 100,
         offset: int = 0,
@@ -115,6 +127,8 @@ class PredictionAnalyticsService:
             category=category,
             mp=mp,
             ida=ida,
+            dataset=dataset,
+            mp_match=mp_match,
             isolation_forest_only=isolation_forest_only,
         )
         paged = rows[offset : offset + limit]
@@ -141,17 +155,19 @@ class PredictionAnalyticsService:
         category: str | None,
         mp: str | None,
         ida: str | None,
+        dataset: str,
+        mp_match: str,
         isolation_forest_only: bool,
     ) -> list[dict[str, str]]:
         rows = []
-        for row in self._load_rows():
+        for row in self._load_rows(dataset):
             if not _matches(_text(row.get("model_risk_level")), risk_level):
                 continue
             if not _matches(_text(row.get("state")), state):
                 continue
             if not _matches(_text(row.get("category")), category):
                 continue
-            if mp and mp.strip().lower() not in _text(row.get("mp_name")).lower():
+            if mp and not self._matches_mp(_text(row.get("mp_name")), mp, mp_match):
                 continue
             if ida and ida.strip().lower() not in _text(row.get("ida")).lower():
                 continue
@@ -160,18 +176,40 @@ class PredictionAnalyticsService:
             rows.append(row)
         return sorted(rows, key=lambda row: _number(row.get("model_risk_score")), reverse=True)
 
-    def _load_rows(self) -> list[dict[str, str]]:
-        if not self.predictions_path.exists():
-            raise FileNotFoundError(f"Predictions file not found: {self.predictions_path}")
+    def _matches_mp(self, row_mp_name: str, expected: str, match_mode: str) -> bool:
+        row_name = _normalize_search(row_mp_name)
+        expected_name = _normalize_search(expected)
+        if not expected_name:
+            return True
+        if match_mode == "exact":
+            return row_name == expected_name
+        return expected_name in row_name
 
-        mtime = self.predictions_path.stat().st_mtime
-        if self._cache_mtime == mtime:
-            return self._rows
+    def _load_rows(self, dataset: str = "test") -> list[dict[str, str]]:
+        if dataset not in {"test", "train", "all"}:
+            raise ValueError("dataset must be one of: test, train, all")
 
-        with self.predictions_path.open("r", encoding="utf-8", newline="") as file:
-            self._rows = [dict(row) for row in csv.DictReader(file)]
-        self._cache_mtime = mtime
-        return self._rows
+        paths = [self.predictions_path]
+        if dataset == "train":
+            paths = [self.train_predictions_path]
+        elif dataset == "all":
+            paths = [self.train_predictions_path, self.predictions_path]
+
+        for path in paths:
+            if not path.exists():
+                raise FileNotFoundError(f"Predictions file not found: {path}")
+
+        cache_key = tuple(path.stat().st_mtime for path in paths)
+        cached = self._cache.get(dataset)
+        if cached and cached[0] == cache_key:
+            return cached[1]
+
+        rows: list[dict[str, str]] = []
+        for path in paths:
+            with path.open("r", encoding="utf-8", newline="") as file:
+                rows.extend(dict(row) for row in csv.DictReader(file))
+        self._cache[dataset] = (cache_key, rows)
+        return rows
 
     def _to_prediction_row(self, row: dict[str, str]) -> PredictionRow:
         reasons = [_text(reason) for reason in _text(row.get("model_reasons")).split("|") if _text(reason)]
@@ -184,7 +222,12 @@ class PredictionAnalyticsService:
             category=_text(row.get("category")) or None,
             work_clean=_text(row.get("work_clean")) or None,
             locality=_text(row.get("locality")) or None,
+            ward=_text(row.get("ward")) or None,
+            block=_text(row.get("block")) or None,
             recommended_date=_text(row.get("recommended_date")) or None,
+            status=_text(row.get("status")) or None,
+            ida_approval=_text(row.get("ida_approval")) or None,
+            source_dataset=_text(row.get("source_dataset")) or None,
             allocation_amount_numeric=_number(row.get("allocation_amount_numeric")),
             model_risk_score=_number(row.get("model_risk_score")),
             model_risk_level=_text(row.get("model_risk_level")) or "GREEN",
