@@ -38,10 +38,10 @@ function RiskAuditSheet({
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-4 animate-fade-in" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
-      <div className="w-full max-w-3xl rounded-[28px] flex flex-col max-h-[92%] animate-scale-in" style={{ background: "#FFFBFE" }} onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-3xl rounded-[28px] flex flex-col max-h-[92%] animate-scale-in" style={{ background: "var(--theme-surface)" }} onClick={(e) => e.stopPropagation()}>
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-2 shrink-0">
-          <div className="w-8 h-1 rounded-full" style={{ background: "#CAC4D0" }} />
+          <div className="w-8 h-1 rounded-full" style={{ background: "var(--theme-handle)" }} />
         </div>
 
         {/* Header */}
@@ -51,8 +51,8 @@ function RiskAuditSheet({
               <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#49454F" }}>Audit case</div>
               <div className="text-lg font-semibold mt-0.5" style={{ fontFamily: "'Google Sans', sans-serif", color: "#1C1B1F" }}>{project.title}</div>
             </div>
-            <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center md-ripple" style={{ background: "#ECE6F0" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="#49454F"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center md-ripple" style={{ background: "var(--theme-control-background)" }} aria-label="Close audit details">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--theme-control-foreground)"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
           </div>
 
@@ -108,7 +108,7 @@ function RiskAuditSheet({
               </div>
               <div className="rounded-2xl p-4" style={{ background: "#FFF8E1" }}>
                 <div className="text-xs font-semibold mb-1.5" style={{ color: "#7C4F00" }}>Why was this flagged?</div>
-                <div className="text-xs leading-relaxed whitespace-pre-line" style={{ color: "#49454F" }}>
+                <div className="flagged-explanation text-xs leading-relaxed whitespace-pre-line" style={{ color: "#3B2A00" }}>
                   {explanation}
                 </div>
               </div>

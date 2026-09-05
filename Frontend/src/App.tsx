@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Tab, Project } from "./data/projects";
 import { getProjects } from "./api";
-import { isSignedIn, signOut } from "./data/auth";
+import { applyTheme, getPreferences, isSignedIn, signOut } from "./data/auth";
 import { HomeScreen } from "./screens/HomeScreen";
 import { AuditsScreen } from "./screens/AuditsScreen";
 import { JudgeScreen } from "./screens/JudgeScreen";
@@ -39,11 +39,13 @@ export default function App() {
   const [auditProject, setAuditProject] = useState<Project | null>(null);
   const [fieldProjectId, setFieldProjectId] = useState<string | null>(null);
   const [showNotif, setShowNotif] = useState(false);
+  const [notificationsUnread, setNotificationsUnread] = useState(true);
   const [profileNav, setProfileNav] = useState<SidebarDestination | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   useEffect(() => {
+    applyTheme(getPreferences().theme);
     getProjects()
       .then(setProjects)
       .catch(requestError => setError(requestError instanceof Error ? requestError.message : "Unable to load projects"))
@@ -54,45 +56,45 @@ export default function App() {
     window.localStorage.setItem(FIELD_ASSIGNMENTS_KEY, JSON.stringify(fieldAssignments));
   }, [fieldAssignments]);
 
-  function handleRequestFieldAudit(project: Project) {
+  const handleRequestFieldAudit = useCallback((project: Project) => {
     setFieldProjectId(project.id);
     setFieldAssignments(current => {
       if (current.some(assigned => assigned.id === project.id)) return current;
       return [project, ...current];
     });
     setTab("field");
-  }
+  }, []);
 
-  function handleOpenAudit(project: Project) {
+  const handleOpenAudit = useCallback((project: Project) => {
     setAuditProject(project);
     setProfileNav(null);
-  }
+  }, []);
 
-  function handleOpenDashboardAudit(project: Project) {
+  const handleOpenDashboardAudit = useCallback((project: Project) => {
     setTab("home");
     handleOpenAudit(project);
-  }
+  }, [handleOpenAudit]);
 
-  function handleSignOut() {
+  const handleSignOut = useCallback(() => {
     signOut();
     setSignedIn(false);
     setProfileNav(null);
     setAuditProject(null);
-  }
+  }, []);
 
-  function handleSignedIn() {
+  const handleSignedIn = useCallback(() => {
     setSignedIn(true);
     setTab("home");
-  }
+  }, []);
 
-  function navigate(destination: SidebarDestination) {
+  const navigate = useCallback((destination: SidebarDestination) => {
     if (destination === "home" || destination === "audits" || destination === "judge" || destination === "field") {
       setTab(destination);
       setProfileNav(null);
       return;
     }
     setProfileNav(destination);
-  }
+  }, []);
 
   const pageTitle = profileNav === "profile" ? "Profile" : profileNav === "preferences" ? "Preferences" : profileNav === "auditlogs" ? "Audit Logs" : tab === "home" ? "Dashboard" : tab === "audits" ? "AI Audit" : tab === "judge" ? "Evaluate" : "Field Audit";
 
@@ -102,7 +104,7 @@ export default function App() {
     }
     return (
       <div className="app-content-area">
-        <WebHeader title={pageTitle} onMenu={() => setSidebarCollapsed((value) => !value)} onNotifications={() => setShowNotif(true)} onNavigate={navigate} onSignOut={() => setConfirmSignOut(true)} />
+        <WebHeader title={pageTitle} notificationsUnread={notificationsUnread} onMenu={() => setSidebarCollapsed((value) => !value)} onNotifications={() => setShowNotif(true)} onNavigate={navigate} onSignOut={() => setConfirmSignOut(true)} />
         <main className="app-main">
           {loading && <div className="loading-state">Loading live predictions...</div>}
           {!loading && error && <div className="loading-state">{error}</div>}
@@ -115,7 +117,7 @@ export default function App() {
           {profileNav === "auditlogs" && <AuditLogsScreen onClose={() => setProfileNav(null)} />}
 
           {auditProject && tab === "home" && <RiskAuditSheet project={auditProject} onClose={() => setAuditProject(null)} onRequestFieldAudit={handleRequestFieldAudit} />}
-          {showNotif && <NotifSheet onClose={() => setShowNotif(false)} />}
+          {showNotif && <NotifSheet onClose={() => setShowNotif(false)} onNavigate={navigate} onMarkAllRead={() => setNotificationsUnread(false)} />}
           {confirmSignOut && <div className="confirm-backdrop" onClick={() => setConfirmSignOut(false)}><div className="confirm-dialog" onClick={(event) => event.stopPropagation()}><div className="confirm-icon">!</div><h2>Sign out?</h2><p>Are you sure you want to sign out of MPLADS AI-Guardian?</p><div className="confirm-actions"><button onClick={() => setConfirmSignOut(false)}>Cancel</button><button className="danger-button" onClick={() => { setConfirmSignOut(false); handleSignOut(); }}>Sign Out</button></div></div></div>}
         </main>
       </div>

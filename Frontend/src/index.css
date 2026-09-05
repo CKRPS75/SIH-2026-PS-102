@@ -2,10 +2,37 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import 'tailwindcss';
 
+:root {
+  --theme-background: #f3f0f9;
+  --theme-surface: #fffbfe;
+  --theme-surface-variant: #ece6f0;
+  --theme-text: #1c1b1f;
+  --theme-muted-text: #49454f;
+  --theme-subtle-text: #79747e;
+  --theme-border: #cac4d0;
+  --theme-control-background: #ece6f0;
+  --theme-control-foreground: #49454f;
+  --theme-handle: #cac4d0;
+}
+
+html[data-theme="dark"] {
+  --theme-background: #141218;
+  --theme-surface: #211f26;
+  --theme-surface-variant: #302d35;
+  --theme-text: #e6e1e9;
+  --theme-muted-text: #cac4d0;
+  --theme-subtle-text: #aaa4b0;
+  --theme-border: #49454f;
+  --theme-control-background: #3b3842;
+  --theme-control-foreground: #f4eff7;
+  --theme-handle: #aaa4b0;
+}
+
 html, body, #root {
   height: 100%;
   font-family: 'Roboto', system-ui, sans-serif;
-  background: #f3f0f9;
+  background: var(--theme-background);
+  color: var(--theme-text);
 }
 
 * { scrollbar-width: none; }
@@ -66,6 +93,107 @@ html, body, #root {
 .animate-scale-in { animation: scale-in 0.25s cubic-bezier(0.05, 0.7, 0.1, 1.0) forwards; }
 .animate-spin { animation: spin 1s linear infinite; }
 .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+/* Theme overrides for shared surfaces and the existing inline base palette. */
+html[data-theme="dark"] .app-shell,
+html[data-theme="dark"] .app-content-area,
+html[data-theme="dark"] .app-main,
+html[data-theme="dark"] .loading-state,
+html[data-theme="dark"] .dashboard-screen,
+html[data-theme="dark"] .app-main > .flex-1,
+html[data-theme="dark"] .app-main > .flex.h-full,
+html[data-theme="dark"] .app-main > .flex-1.flex {
+  color: var(--theme-text) !important;
+  background: var(--theme-background) !important;
+}
+
+html[data-theme="dark"] .web-header,
+html[data-theme="dark"] .profile-menu,
+html[data-theme="dark"] .confirm-dialog,
+html[data-theme="dark"] .app-main .rounded-3xl[style*="FFFBFE" i],
+html[data-theme="dark"] .app-main .rounded-3xl[style*="rgb(255, 251, 254)" i] {
+  color: var(--theme-text) !important;
+  background: var(--theme-surface) !important;
+  border-color: var(--theme-border) !important;
+}
+
+html[data-theme="dark"] .app-main [style*="color: #1C1B1F" i],
+html[data-theme="dark"] .app-main [style*="color: rgb(28, 27, 31)" i],
+html[data-theme="dark"] .app-main [style*="color: #49454F" i],
+html[data-theme="dark"] .app-main [style*="color: rgb(73, 69, 79)" i],
+html[data-theme="dark"] .app-main [style*="color: #79747E" i],
+html[data-theme="dark"] .app-main [style*="color: rgb(121, 116, 126)" i] {
+  color: var(--theme-text) !important;
+}
+
+html[data-theme="dark"] .app-main [style*="background: #F3F0F9" i],
+html[data-theme="dark"] .app-main [style*="background: rgb(243, 240, 249)" i],
+html[data-theme="dark"] .app-main [style*="background: #ECE6F0" i],
+html[data-theme="dark"] .app-main [style*="background: rgb(236, 230, 240)" i] {
+  background: var(--theme-surface-variant) !important;
+}
+
+html[data-theme="dark"] .app-main [style*="border: 1px solid #CAC4D0" i],
+html[data-theme="dark"] .app-main [style*="border-color: #CAC4D0" i],
+html[data-theme="dark"] .app-main [style*="border-color: rgb(202, 196, 208)" i] {
+  border-color: var(--theme-border) !important;
+}
+
+html[data-theme="dark"] .app-main input,
+html[data-theme="dark"] .app-main textarea,
+html[data-theme="dark"] .app-main select {
+  color: var(--theme-text) !important;
+  caret-color: var(--theme-text);
+}
+
+html[data-theme="dark"] .app-main input::placeholder,
+html[data-theme="dark"] .app-main textarea::placeholder {
+  color: var(--theme-subtle-text) !important;
+}
+
+html[data-theme="dark"] .risk-distribution-row,
+html[data-theme="dark"] .state-anomaly-row {
+  background: var(--theme-surface-variant) !important;
+}
+
+html[data-theme="dark"] .risk-distribution-row > div:first-child,
+html[data-theme="dark"] .state-anomaly-row > div:first-child {
+  color: var(--theme-text) !important;
+}
+
+html[data-theme="dark"] .risk-distribution-row > div:first-child > div:last-child,
+html[data-theme="dark"] .state-anomaly-row > div:first-child > div:last-child,
+html[data-theme="dark"] .risk-distribution-row > div:last-child > div:last-child,
+html[data-theme="dark"] .state-anomaly-row > div:last-child > div:last-child {
+  color: var(--theme-muted-text) !important;
+}
+
+.flagged-explanation {
+  color: #241800 !important;
+}
+
+html[data-theme="dark"] .icon-button,
+html[data-theme="dark"] .profile-trigger,
+html[data-theme="dark"] .profile-menu button {
+  color: var(--theme-muted-text);
+}
+
+html[data-theme="dark"] .icon-button:hover,
+html[data-theme="dark"] .profile-trigger:hover,
+html[data-theme="dark"] .profile-menu button:hover {
+  background: var(--theme-surface-variant);
+}
+
+html[data-theme="dark"] .profile-copy strong,
+html[data-theme="dark"] .profile-menu-heading strong {
+  color: var(--theme-text) !important;
+}
+
+html[data-theme="dark"] .profile-copy small,
+html[data-theme="dark"] .profile-menu-heading small,
+html[data-theme="dark"] .chevron {
+  color: var(--theme-muted-text) !important;
+}
 
 .app-shell { height: 100%; min-height: 100%; display: flex; color: #1c1b1f; background: #f3f0f9; }
 .app-sidebar { position: sticky; top: 0; width: 248px; height: 100vh; flex: 0 0 248px; min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; padding: 25px 14px 18px; color: #e8e7ff; background: #211d3b; transition: width 180ms ease, flex-basis 180ms ease; box-sizing: border-box; }

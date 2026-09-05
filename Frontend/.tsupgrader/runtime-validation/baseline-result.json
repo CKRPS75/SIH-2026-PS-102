@@ -1,0 +1,50 @@
+{
+  "planHash": "897fa3e41c5724eabd9ee910cd64ab5673726613f93caf53dfd39b176689b5dc",
+  "phase": "baseline",
+  "recordedAtUtc": "2026-09-05T08:57:43.6427807Z",
+  "retryCount": 0,
+  "resetBaseline": false,
+  "result": {
+    "setupSucceeded": true,
+    "setupDurationMs": 2351,
+    "setupFailureOutput": null,
+    "assertions": [
+      {
+        "name": "tsc-no-emit",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "",
+        "durationMs": 8465
+      },
+      {
+        "name": "build-succeeds",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E figma-make-app@1.0.0 build\r\n\u003E vite build\r\n\r\n\u001B[33m(!) Your Vite config uses features that are unsupported by \u0060configLoader: \u0027native\u0027\u0060, which is planned to become the default in a future major version of Vite:\r\n  - \u0060__dirname\u0060 (vite.config.ts:29:27). Use \u0060import.meta.dirname\u0060 instead\r\n  - JSON import \u0022./.figma/make/site.json\u0022 without import attributes (vite.config.ts:6:31). Add \u0060with { type: \u0027json\u0027 }\u0060\r\nSet \u0060VITE_CONFIG_NATIVE_IGNORE_WARNING=true\u0060 to suppress this warning.\u001B[39m\r\n\u001B[36mvite v8.2.2 \u001B[32mbuilding client environment for production...\u001B[36m\u001B[39m\r\ntransforming...\r\n\u2713 81 modules transformed.\r\nrendering chunks...\r\ncomputing gzip size...\r\ndist/robots.txt                   0.02 kB \u2502 gzip:   0.04 kB\r\ndist/index.html                   0.95 kB \u2502 gzip:   0.43 kB\r\ndist/assets/index-DNIPtcFE.css   59.80 kB \u2502 gzip:  15.55 kB\r\ndist/assets/index-BlEICUkx.js   471.83 kB \u2502 gzip: 136.39 kB\r\n\r\n\u001B[32m\u2713 built in 1.51s\u001B[39m\r\n",
+        "durationMs": 3894
+      },
+      {
+        "name": "dev-server-serves-home",
+        "kind": "http-probe",
+        "verificationMethod": "http-status",
+        "passed": false,
+        "timedOut": false,
+        "skipped": true,
+        "skippedReason": "devServer never became ready: devServer process exited before http://localhost:5173/ responded (exit=1). Output:\n\r\n\u003E figma-make-app@1.0.0 dev\r\n\u003E vite --host 0.0.0.0\r\n\r\n\u001B[33m(!) Your Vite config uses features that are unsupported by \u0060configLoader: \u0027native\u0027\u0060, which is planned to become the default in a future major version of Vite:\r\n  - \u0060__dirname\u0060 (vite.config.ts:29:27). Use \u0060import.meta.dirname\u0060 instead\r\n  - JSON import \u0022./.figma/make/site.json\u0022 without import attributes (vite.config.ts:6:31). Add \u0060with { type: \u0027json\u0027 }\u0060\r\nSet \u0060VITE_CONFIG_NATIVE_IGNORE_WARNING=true\u0060 to suppress this warning.\u001B[39m\r\n\u001B[2m2:27:28 pm\u001B[22m \u001B[36m\u001B[1m[vite]\u001B[22m\u001B[39m \u001B[90m\u001B[2m(client)\u001B[22m\u001B[39m Re-optimizing dependencies because lockfile has changed\r\n\u001B[31merror when starting dev server:\r\nError: Port 8443 is already in use\r\n    at httpServerStart (file:///C:/Users/Malika/OneDrive/Desktop/sih26/SIH-2026-PS-102/Frontend/node_modules/vite/dist/node/chunks/node.js:11681:10)\r\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\r\n    at async startServer (file:///C:/Users/Malika/OneDrive/Desktop/sih26/SIH-2026-PS-102/Frontend/node_modules/vite/dist/node/chunks/node.js:26694:30)\r\n    at async Object.listen (file:///C:/Users/Malika/OneDrive/Desktop/sih26/SIH-2026-PS-102/Frontend/node_modules/vite/dist/node/chunks/node.js:26511:4)\r\n    at async CAC.\u003Canonymous\u003E (file:///C:/Users/Malika/OneDrive/Desktop/sih26/SIH-2026-PS-102/Frontend/node_modules/vite/dist/node/cli.js:721:3)\u001B[39m\r\n",
+        "exitCode": null,
+        "outputSample": "",
+        "durationMs": 0
+      }
+    ]
+  }
+}

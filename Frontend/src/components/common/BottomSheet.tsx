@@ -5,12 +5,12 @@ function BottomSheet({ onClose, children, title }: { onClose: () => void; childr
     <div className="absolute inset-0 z-50 flex flex-col justify-end sheet-backdrop animate-fade-in" onClick={onClose}>
       <div
         className="rounded-t-[28px] flex flex-col max-h-[90%] animate-slide-up"
-        style={{ background: "#FFFBFE" }}
+        style={{ background: "var(--theme-surface)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Drag handle */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="w-8 h-1 rounded-full" style={{ background: "#CAC4D0" }} />
+          <div className="w-8 h-1 rounded-full" style={{ background: "var(--theme-handle)" }} />
         </div>
         {title && (
           <div className="px-6 pt-2 pb-4 shrink-0">

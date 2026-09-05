@@ -5,7 +5,7 @@ function Card({ children, className = "", onClick }: { children: React.ReactNode
     <div
       onClick={onClick}
       className={`rounded-3xl ${className} ${onClick ? "md-ripple cursor-pointer active:scale-[0.98] transition-transform" : ""}`}
-      style={{ background: "#FFFBFE" }}
+      style={{ background: "var(--theme-surface)" }}
     >
       {children}
     </div>

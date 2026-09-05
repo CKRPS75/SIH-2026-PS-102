@@ -68,6 +68,10 @@ type PredictionListResponse = {
   rows: PredictionRow[];
 };
 
+let projectsRequest: Promise<Project[]> | null = null;
+let mockAlertsRequest: Promise<Project[]> | null = null;
+let stateRatesRequest: Promise<StateAnomalyRateResponse> | null = null;
+
 export type DuplicateProjectPair = {
   pair_label: string;
   first_work: string;
@@ -194,18 +198,36 @@ function predictionToProject(row: PredictionRow): Project {
   };
 }
 
-export async function getProjects(): Promise<Project[]> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/predictions?dataset=all&limit=70000`);
-  if (!response.ok) throw new Error(`Could not load MPLADS predictions (${response.status})`);
-  const data = await response.json() as PredictionListResponse;
-  return data.rows.map(predictionToProject);
+export function getProjects(): Promise<Project[]> {
+  if (!projectsRequest) {
+    projectsRequest = fetch(`${API_BASE_URL}/api/v1/predictions?dataset=all&limit=70000`)
+      .then(async response => {
+        if (!response.ok) throw new Error(`Could not load MPLADS predictions (${response.status})`);
+        const data = await response.json() as PredictionListResponse;
+        return data.rows.map(predictionToProject);
+      })
+      .catch(error => {
+        projectsRequest = null;
+        throw error;
+      });
+  }
+  return projectsRequest;
 }
 
-export async function getMockLiveAlerts(): Promise<Project[]> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/mock/live-alerts?limit=100`);
-  if (!response.ok) throw new Error(`Could not load mock live alerts (${response.status})`);
-  const data = await response.json() as PredictionListResponse;
-  return data.rows.map(predictionToProject);
+export function getMockLiveAlerts(limit = 100): Promise<Project[]> {
+  if (!mockAlertsRequest) {
+    mockAlertsRequest = fetch(`${API_BASE_URL}/api/v1/mock/live-alerts?limit=${limit}`)
+      .then(async response => {
+        if (!response.ok) throw new Error(`Could not load mock live alerts (${response.status})`);
+        const data = await response.json() as PredictionListResponse;
+        return data.rows.map(predictionToProject);
+      })
+      .catch(error => {
+        mockAlertsRequest = null;
+        throw error;
+      });
+  }
+  return mockAlertsRequest;
 }
 
 export async function getPredictions({
@@ -231,10 +253,19 @@ export async function getDuplicateLocations(limit = 10): Promise<DuplicateLocati
   return await response.json() as DuplicateLocationAnalyticsResponse;
 }
 
-export async function getStateAnomalyRates(limit = 10): Promise<StateAnomalyRateResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/analytics/states/anomaly-rate?dataset=all&limit=${limit}&min_projects=10`);
-  if (!response.ok) throw new Error(`Could not load state anomaly rates (${response.status})`);
-  return await response.json() as StateAnomalyRateResponse;
+export function getStateAnomalyRates(limit = 10): Promise<StateAnomalyRateResponse> {
+  if (!stateRatesRequest) {
+    stateRatesRequest = fetch(`${API_BASE_URL}/api/v1/analytics/states/anomaly-rate?dataset=all&limit=${limit}&min_projects=10`)
+      .then(async response => {
+        if (!response.ok) throw new Error(`Could not load state anomaly rates (${response.status})`);
+        return await response.json() as StateAnomalyRateResponse;
+      })
+      .catch(error => {
+        stateRatesRequest = null;
+        throw error;
+      });
+  }
+  return stateRatesRequest;
 }
 
 export async function getDuplicateLocationDetail(locationKey: string): Promise<DuplicateLocationRow> {

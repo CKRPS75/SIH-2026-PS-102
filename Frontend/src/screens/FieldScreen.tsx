@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "../components/common/Card";
 import { FieldLocationMap } from "../components/common/FieldLocationMap";
 import { CameraModule, type FieldCaptureMetadata } from "../components/common/CameraModule";
@@ -82,6 +82,17 @@ function FieldScreen({ assignments, selectedProjectId: requestedProjectId }: { a
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [captureMetadata, setCaptureMetadata] = useState<FieldCaptureMetadata | null>(null);
   const [geotagVerification, setGeotagVerification] = useState<GeotagVerification | null>(null);
+  const exifIntervalRef = useRef<number | null>(null);
+  const verificationTimeoutRef = useRef<number | null>(null);
+
+  function clearVerificationTimers() {
+    if (exifIntervalRef.current !== null) window.clearInterval(exifIntervalRef.current);
+    if (verificationTimeoutRef.current !== null) window.clearTimeout(verificationTimeoutRef.current);
+    exifIntervalRef.current = null;
+    verificationTimeoutRef.current = null;
+  }
+
+  useEffect(() => clearVerificationTimers, []);
 
   useEffect(() => {
     if (requestedProjectId && assignments.some((project) => project.id === requestedProjectId)) {
@@ -110,22 +121,27 @@ function FieldScreen({ assignments, selectedProjectId: requestedProjectId }: { a
   }
 
   function handleExtract() {
+    clearVerificationTimers();
     if (selectedProject) {
       setGeotagVerification(verifyCaptureLocation(selectedProject, captureMetadata));
     }
     setState("exif");
     let step = 0;
-    const interval = window.setInterval(() => {
+    exifIntervalRef.current = window.setInterval(() => {
       step += 1;
       setExifStep(step);
       if (step >= exifSteps.length) {
-        window.clearInterval(interval);
-        window.setTimeout(() => setState("verified"), 600);
+        clearVerificationTimers();
+        verificationTimeoutRef.current = window.setTimeout(() => {
+          verificationTimeoutRef.current = null;
+          setState("verified");
+        }, 600);
       }
     }, 500);
   }
 
   function resetToQueue() {
+    clearVerificationTimers();
     setExifStep(0);
     setCapturedImage(null);
     setCaptureMetadata(null);

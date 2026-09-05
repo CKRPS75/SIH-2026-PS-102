@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import type { Project } from "../data/projects";
 import { riskColor } from "../utils/helpers";
 import { Chip } from "../components/common/Chip";
@@ -11,18 +11,18 @@ function AuditsScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAu
   const [search, setSearch] = useState("");
   const [statusF, setStatusF] = useState("All");
 
-  const filtered = projects.filter(p => {
+  const filtered = useMemo(() => projects.filter(p => {
     const ms = p.title.toLowerCase().includes(search.toLowerCase()) || p.id.toLowerCase().includes(search.toLowerCase());
     const mf = statusF === "All" || p.status === statusF;
     return ms && mf;
-  });
+  }), [projects, search, statusF]);
 
-  const summary = [
+  const summary = useMemo(() => [
     { label: "Critical", value: projects.filter(p=>p.status==="HIGH RISK").length, bg: "#FFDAD6", text: "#B3261E" },
     { label: "Review", value: projects.filter(p=>p.status==="REVIEW").length, bg: "#FFEFD6", text: "#7C4F00" },
     { label: "Verified", value: projects.filter(p=>p.status==="VERIFIED").length, bg: "#D4F8E8", text: "#006C4C" },
     { label: "Total", value: projects.length, bg: "#E8E7FF", text: "#1A006E" },
-  ];
+  ], [projects]);
 
   return (
     <div className="flex-1 overflow-y-auto" style={{ background: "#F3F0F9" }}>
@@ -100,4 +100,6 @@ function AuditsScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAu
   );
 }
 
-export { AuditsScreen };
+const MemoizedAuditsScreen = memo(AuditsScreen);
+
+export { MemoizedAuditsScreen as AuditsScreen };

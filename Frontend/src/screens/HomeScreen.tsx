@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { memo, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Project, Filter } from "../data/projects";
 import { getMockLiveAlerts, getPredictions, getStateAnomalyRates, type PredictionRow, type StateAnomalyRateRow } from "../api";
 import { riskColor } from "../utils/helpers";
@@ -158,7 +158,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
   }, []);
 
   const filters: Filter[] = ["All", "Duplicates", "Overpricing", "Split Sanctions"];
-  const riskBucketStats = RISK_BUCKETS.map(bucket => {
+  const riskBucketStats = useMemo(() => RISK_BUCKETS.map(bucket => {
     const bucketProjects = projects.filter(project => {
       const score = projectRiskScore(project);
       return score >= bucket.min && score < bucket.max;
@@ -170,7 +170,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
       percentage: projects.length ? (bucketProjects.length / projects.length) * 100 : 0,
       allocationAmount,
     };
-  });
+  }), [projects]);
   const nonZeroRiskCards: DashboardKpiCard[] = riskBucketStats
     .filter(bucket => bucket.projectCount > 0)
     .map(bucket => ({
@@ -186,28 +186,32 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
     ...nonZeroRiskCards,
   ];
 
-  const validAllocationProjects = projects.filter(project => amountToRupees(project) >= 0);
-  const allocationValues = validAllocationProjects.map(amountToRupees);
-  const allocationBucketStats = ALLOCATION_BUCKETS.map(bucket => {
-    const bucketProjects = validAllocationProjects.filter(project => {
-      const amount = amountToRupees(project);
-      return amount >= bucket.min && amount < bucket.max;
+  const allocationStats = useMemo(() => {
+    const validAllocationProjects = projects.filter(project => amountToRupees(project) >= 0);
+    const allocationValues = validAllocationProjects.map(amountToRupees);
+    const allocationBucketStats = ALLOCATION_BUCKETS.map(bucket => {
+      const bucketProjects = validAllocationProjects.filter(project => {
+        const amount = amountToRupees(project);
+        return amount >= bucket.min && amount < bucket.max;
+      });
+      return {
+        ...bucket,
+        projectCount: bucketProjects.length,
+        percentage: validAllocationProjects.length ? (bucketProjects.length / validAllocationProjects.length) * 100 : 0,
+        totalAllocation: bucketProjects.reduce((sum, project) => sum + amountToRupees(project), 0),
+      };
     });
     return {
-      ...bucket,
-      projectCount: bucketProjects.length,
-      percentage: validAllocationProjects.length ? (bucketProjects.length / validAllocationProjects.length) * 100 : 0,
-      totalAllocation: bucketProjects.reduce((sum, project) => sum + amountToRupees(project), 0),
+      allocationBucketStats,
+      maxAllocationBucketCount: Math.max(...allocationBucketStats.map(bucket => bucket.projectCount), 1),
+      medianAllocation: percentile(allocationValues, 50),
+      p90Allocation: percentile(allocationValues, 90),
+      p95Allocation: percentile(allocationValues, 95),
+      meanAllocation: allocationValues.length ? allocationValues.reduce((sum, amount) => sum + amount, 0) / allocationValues.length : 0,
+      maxAllocation: Math.max(...allocationValues, 0),
     };
-  });
-  const maxAllocationBucketCount = Math.max(...allocationBucketStats.map(bucket => bucket.projectCount), 1);
-  const medianAllocation = percentile(allocationValues, 50);
-  const p90Allocation = percentile(allocationValues, 90);
-  const p95Allocation = percentile(allocationValues, 95);
-  const meanAllocation = allocationValues.length
-    ? allocationValues.reduce((sum, amount) => sum + amount, 0) / allocationValues.length
-    : 0;
-  const maxAllocation = Math.max(...allocationValues, 0);
+  }, [projects]);
+  const { allocationBucketStats, maxAllocationBucketCount, medianAllocation, p90Allocation, p95Allocation, meanAllocation, maxAllocation } = allocationStats;
   const allocationSummaryCards: Array<{ label: string; value: number; emphasize: boolean }> = [
     { label: "Median", value: medianAllocation, emphasize: true },
     { label: "Mean", value: meanAllocation, emphasize: false },
@@ -216,7 +220,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
     { label: "Max", value: maxAllocation, emphasize: false },
   ];
 
-  const stateStats = Object.values(
+  const stateStats = useMemo(() => Object.values(
     projects.reduce<Record<string, {
       key: string;
       state: string;
@@ -265,7 +269,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
     anomalyRate: row.totalProjects ? (row.anomalousProjects / row.totalProjects) * 100 : 0,
     averageRiskScore: row.totalProjects ? row.riskScoreTotal / row.totalProjects : 0,
     confidence: row.totalProjects >= 10 ? "High" : "Low Sample Confidence",
-  }));
+  })), [projects]);
   const stateStatsByKey = new Map(stateStats.map(row => [row.key, row]));
   const fallbackStates = stateStats
     .filter(row => row.totalProjects >= 10)
@@ -302,7 +306,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
       ?? null
     : null;
 
-  const filtered = projects.filter(p => {
+  const filtered = useMemo(() => projects.filter(p => {
     if (filter === "All") return true;
     if (filter === "Duplicates") return p.anomaly === "Duplicate";
     if (filter === "Overpricing") return p.anomaly === "Overpricing";
@@ -320,12 +324,12 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
     if (!bucket) return true;
     const amount = amountToRupees(project);
     return amount >= bucket.min && amount < bucket.max;
-  });
+  }), [projects, filter, riskBucketFilter, allocationBucketFilter]);
   const alertCount = mockAlertProjects.length;
-  const alertGroups = ALERT_SECTIONS.map(section => ({
+  const alertGroups = useMemo(() => ALERT_SECTIONS.map(section => ({
     ...section,
     projects: mockAlertProjects.filter(project => project.status === section.key),
-  }));
+  })), [mockAlertProjects]);
   const mapPositions = [
     { x: "40%", y: "40%" },
     { x: "43%", y: "44%" },
@@ -495,7 +499,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
                   key={bucket.label}
                   onClick={() => setRiskBucketFilter(riskBucketFilter === bucket.label ? null : bucket.label)}
                   title={`${bucket.label}: ${bucket.projectCount} projects, ${bucket.percentage.toFixed(1)}%, ${amountLabelFromRupees(bucket.allocationAmount)}`}
-                  className="w-full text-left grid grid-cols-[74px_1fr_62px] items-center gap-2 rounded-2xl p-2 md-ripple"
+                    className="risk-distribution-row w-full text-left grid grid-cols-[74px_1fr_62px] items-center gap-2 rounded-2xl p-2 md-ripple"
                   style={{ background: riskBucketFilter === bucket.label ? "#E8E7FF" : "#FFFFFF" }}
                 >
                   <div>
@@ -533,7 +537,7 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
                   key={row.key}
                   onClick={() => setSelectedState(selectedState === row.key ? null : row.key)}
                   title={`${row.state}: ${row.anomalousProjects} anomaly candidates from ${row.totalProjects} MPLADS projects`}
-                  className="w-full text-left grid grid-cols-[104px_1fr_52px] items-center gap-2 rounded-2xl p-2 md-ripple"
+                  className="state-anomaly-row w-full text-left grid grid-cols-[104px_1fr_52px] items-center gap-2 rounded-2xl p-2 md-ripple"
                   style={{ background: selectedState === row.key ? "#E8E7FF" : "#FFFFFF" }}
                 >
                   <div className="min-w-0">
@@ -722,4 +726,6 @@ function HomeScreen({ projects, onOpenAudit }: { projects: Project[]; onOpenAudi
   );
 }
 
-export { HomeScreen };
+const MemoizedHomeScreen = memo(HomeScreen);
+
+export { MemoizedHomeScreen as HomeScreen };

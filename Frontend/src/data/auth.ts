@@ -4,6 +4,7 @@
 const AUTH_KEY = "mplads-auth";
 const PREFS_KEY = "mplads-preferences";
 const LOGS_KEY = "mplads-audit-logs";
+const READ_NOTIFICATIONS_KEY = "mplads-read-notifications";
 
 export type OfficerProfile = {
   name: string;
@@ -56,6 +57,38 @@ const DEFAULT_PREFS: Preferences = {
   riskThreshold: 60,
   auditSensitivity: "medium",
 };
+
+let systemThemeQuery: MediaQueryList | null = null;
+let systemThemeListener: ((event: MediaQueryListEvent) => void) | null = null;
+
+function getEffectiveTheme(theme: Preferences["theme"]): "light" | "dark" {
+  if (theme === "system") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return theme;
+}
+
+export function applyTheme(theme: Preferences["theme"]): void {
+  const root = document.documentElement;
+  const setTheme = (preference: Preferences["theme"]) => {
+    root.dataset.themePreference = preference;
+    root.dataset.theme = getEffectiveTheme(preference);
+    root.style.colorScheme = getEffectiveTheme(preference);
+  };
+
+  if (systemThemeQuery && systemThemeListener) {
+    systemThemeQuery.removeEventListener("change", systemThemeListener);
+  }
+  systemThemeQuery = null;
+  systemThemeListener = null;
+
+  setTheme(theme);
+  if (theme === "system") {
+    systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    systemThemeListener = () => setTheme("system");
+    systemThemeQuery.addEventListener("change", systemThemeListener);
+  }
+}
 
 const SEED_LOGS: AuditLogEntry[] = [
   { id: "L001", date: "2026-08-29", time: "14:32", action: "User signed in", officer: "MPLADS-OFF-204", status: "Success" },
@@ -127,11 +160,13 @@ export function getPreferences(): Preferences {
 
 export function savePreferences(prefs: Preferences): void {
   window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  applyTheme(prefs.theme);
   addLog({ action: "Preferences updated", status: "Success" });
 }
 
 export function resetPreferences(): void {
   window.localStorage.setItem(PREFS_KEY, JSON.stringify(DEFAULT_PREFS));
+  applyTheme(DEFAULT_PREFS.theme);
   addLog({ action: "Preferences reset to default", status: "Success" });
 }
 
@@ -144,6 +179,21 @@ export function getLogs(): AuditLogEntry[] {
   } catch {
     return SEED_LOGS;
   }
+}
+
+export function getReadNotificationIds(): string[] {
+  try {
+    const stored = window.localStorage.getItem(READ_NOTIFICATIONS_KEY);
+    return stored ? JSON.parse(stored) as string[] : [];
+  } catch {
+    return [];
+  }
+}
+
+export function markNotificationsRead(ids: string[]): void {
+  const current = new Set(getReadNotificationIds());
+  ids.forEach(id => current.add(id));
+  window.localStorage.setItem(READ_NOTIFICATIONS_KEY, JSON.stringify([...current]));
 }
 
 function addLog(entry: Omit<AuditLogEntry, "id" | "date" | "time" | "officer">): void {
